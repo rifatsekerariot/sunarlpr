@@ -115,6 +115,7 @@ async def get_cameras_html(db: AsyncSession = Depends(get_db_session)):
     for c in cameras:
         status_bg = "bg-emerald-50 text-emerald-700 border-emerald-200" if c.is_active else "bg-zinc-50 text-zinc-700 border-zinc-200"
         status_text = "AKTİF" if c.is_active else "PASİF"
+        token_js = "localStorage.getItem('access_token')"
         rows += f"""
         <tr class="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
             <td class="px-6 py-4 text-sm font-semibold text-zinc-950">{c.name}</td>
@@ -125,11 +126,19 @@ async def get_cameras_html(db: AsyncSession = Depends(get_db_session)):
                 <span class="px-2.5 py-0.5 text-xs rounded-full border {status_bg} font-medium">{status_text}</span>
             </td>
             <td class="px-6 py-4 text-center">
+                <span hx-get="/api/cameras/{c.id}/ping"
+                      hx-trigger="load, every 10s"
+                      hx-swap="outerHTML"
+                      hx-headers='{{"Authorization": "Bearer " + localStorage.getItem("access_token")}}'
+                      class="text-[10px] text-zinc-400">kontrol ediliyor...</span>
+            </td>
+            <td class="px-6 py-4 text-center">
                 <button class="px-2.5 py-1 text-xs border border-red-200 rounded bg-red-50 text-red-700 hover:bg-red-100 transition-colors" onclick="deleteCamera('{c.id}')">Sil</button>
             </td>
         </tr>
         """
     return rows
+
 
 @router.get("/live-monitor", response_class=HTMLResponse)
 async def get_live_monitor_html(db: AsyncSession = Depends(get_db_session)):

@@ -32,6 +32,15 @@
             }
         }
     </script>
+    <script>
+        // Inject JWT token into every HTMX request automatically
+        document.addEventListener('htmx:configRequest', function(evt) {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                evt.detail.headers['Authorization'] = 'Bearer ' + token;
+            }
+        });
+    </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
     </style>
@@ -225,6 +234,7 @@
                             <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">YÖN</th>
                             <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">RTSP BAĞLANTISI</th>
                             <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">DURUM</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">BAĞLANTI</th>
                             <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
                         </tr>
                     </thead>
