@@ -75,17 +75,13 @@ services:
     build: ./worker
     container_name: lpr-worker
     restart: always
+    network_mode: host
     environment:
-      - BACKEND_API_URL=http://backend:8000
-      - REDIS_URL=redis://redis:6379/0
+      - BACKEND_API_URL=http://127.0.0.1
+      - REDIS_URL=redis://127.0.0.1:6379/0
     volumes:
       - ./worker:/app
       - shared-media:/app/media
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      backend:
-        condition: service_started
 
   nginx:
     image: nginx:alpine

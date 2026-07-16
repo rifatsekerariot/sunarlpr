@@ -65,9 +65,48 @@ def run_worker():
     detector = PlateDetector()
     ocr_engine = PlateOCR()
     
-    # For testing, if we don't have actual RTSP streams, we run a virtual camera loop.
-    # We load active cameras from configuration
-    cameras = worker_config.CAMERAS
+    # Authenticate and get Token from backend API
+    headers = {}
+    try:
+        login_url = f"{worker_config.BACKEND_API_URL}/api/auth/login"
+        login_res = requests.post(
+            login_url, 
+            data={"username": "admin", "password": "admin123"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=5
+        )
+        if login_res.status_code == 200:
+            token = login_res.json().get("access_token")
+            headers["Authorization"] = f"Bearer {token}"
+            setup_logger.info("Worker authenticated successfully with Backend API")
+        else:
+            setup_logger.error("Worker authentication failed", status=login_res.status_code)
+    except Exception as e:
+        setup_logger.error("Error authenticating worker", error=str(e))
+
+    # Fetch active cameras dynamically from backend API
+    cameras = {}
+    try:
+        url = f"{worker_config.BACKEND_API_URL}/api/cameras"
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            for cam in response.json():
+                if cam["is_active"]:
+                    cameras[cam["id"]] = {
+                        "name": cam["name"],
+                        "rtsp_url": cam["rtsp_url"],
+                        "direction": cam["direction"]
+                    }
+            setup_logger.info("Loaded active cameras from backend API", count=len(cameras))
+        else:
+            setup_logger.error("Failed to load cameras from backend API", status=response.status_code)
+    except Exception as e:
+        setup_logger.error("Error fetching cameras from backend", error=str(e))
+
+    # Fallback to config if API fails or returns no active cameras
+    if not cameras:
+        setup_logger.warning("No cameras loaded from API, falling back to local config")
+        cameras = worker_config.CAMERAS
     
     # Open streams/captures
     caps = {}

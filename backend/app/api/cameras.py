@@ -29,6 +29,14 @@ async def create_camera(
 ):
     if current_user.role not in ["ADMIN", "MANAGER"]:
         raise HTTPException(status_code=403, detail="Not authorized to configure cameras")
+    
+    # Check if duplicate RTSP URL exists
+    from sqlalchemy import select
+    stmt = select(Camera).filter(Camera.rtsp_url == camera_in.rtsp_url)
+    res = await db.execute(stmt)
+    if res.scalars().first():
+        raise HTTPException(status_code=400, detail="Bu RTSP bağlantısına sahip bir kamera zaten mevcut.")
+
     repo = CameraRepository(db)
     camera = Camera(**camera_in.model_dump())
     new_camera = await repo.create(camera)

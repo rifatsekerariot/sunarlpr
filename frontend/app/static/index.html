@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SUNAR LPR</title>
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
     <!-- Google Fonts & Tailwind CDN & FontAwesome & HTMX & Alpine.js -->
     <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -32,6 +34,7 @@
             }
         }
     </script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script>
         // Inject JWT token into every HTMX request automatically
         document.addEventListener('htmx:configRequest', function(evt) {
@@ -41,10 +44,7 @@
             }
         });
     </script>
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        [x-cloak] { display: none !important; }
-    </style>
+    <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
 </head>
 <body class="bg-zinc-50 text-zinc-900 flex min-h-screen" x-data="{ 
     currentTab: localStorage.getItem('active_tab') || 'dashboard', 
@@ -261,9 +261,9 @@
                             <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
                         </tr>
                     </thead>
-                    <tbody id="camera-table-body" hx-get="/api/html/cameras" hx-trigger="load" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
+                    <tbody id="camera-table-body" hx-get="/api/html/cameras" hx-trigger="load, reloadCameras" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
                         <tr>
-                            <td colspan="6" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
+                            <td colspan="7" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -272,7 +272,7 @@
     </main>
 
     <!-- Modal Popup for vehicle history -->
-    <div x-show="modalOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
+    <div x-show="modalOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" style="display: none;" x-cloak>
         <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[550px] max-w-full flex flex-col gap-4 shadow-xl">
             <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500">Geçiş Geçmişi: <span class="text-zinc-950 font-bold" x-text="modalPlate"></span></h3>
             
@@ -312,7 +312,7 @@
     </div>
 
     <!-- Modal for adding/editing vehicles -->
-    <div x-show="editOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
+    <div x-show="editOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" style="display: none;" x-cloak>
         <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
             <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500" x-text="editId ? 'Araç Kaydını Düzenle' : 'Yeni Araç Kaydı'"></h3>
             
@@ -341,7 +341,7 @@
     </div>
 
     <!-- Modal for adding camera -->
-    <div x-show="cameraOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
+    <div x-show="cameraOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" style="display: none;" x-cloak>
         <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
             <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500" x-text="camId ? 'Kamerayı Düzenle' : 'Yeni Kamera Tanımla'"></h3>
             
@@ -493,9 +493,14 @@
                 alert(state.id ? 'Kamera başarıyla güncellendi.' : 'Kamera başarıyla eklendi.');
                 state.close();
                 state.clear();
-                htmx.trigger('#camera-table-body', 'load');
+                htmx.trigger('#camera-table-body', 'reloadCameras');
             } else {
-                alert('İşlem sırasında hata oluştu.');
+                try {
+                    const errData = await res.json();
+                    alert(errData.detail || 'İşlem sırasında hata oluştu.');
+                } catch(e) {
+                    alert('İşlem sırasında hata oluştu.');
+                }
             }
         }
 
@@ -516,7 +521,7 @@
 
             if (res.ok) {
                 alert('Kamera başarıyla silindi.');
-                htmx.trigger('#camera-table-body', 'load');
+                htmx.trigger('#camera-table-body', 'reloadCameras');
             } else {
                 alert('Silme işlemi başarısız.');
             }
