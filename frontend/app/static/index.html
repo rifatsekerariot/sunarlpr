@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="tr" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUNAR LPR</title>
+    <!-- Google Fonts & Tailwind CDN & FontAwesome & HTMX & Alpine.js -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        zinc: {
+                            50: '#f9f9fb',
+                            100: '#f4f4f5',
+                            200: '#e4e4e7',
+                            300: '#d4d4d8',
+                            400: '#a1a1aa',
+                            500: '#71717a',
+                            900: '#18181b',
+                            950: '#09090b'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-zinc-50 text-zinc-900 flex min-h-screen" x-data="{ 
+    currentTab: 'dashboard', 
+    modalOpen: false, 
+    modalPlate: '', 
+    historyData: [],
+    editOpen: false,
+    editId: '',
+    editPlate: '',
+    editStatus: 'AUTHORIZED',
+    editOwner: '',
+    editCompany: '',
+    editType: 'PERSONNEL',
+    cameraOpen: false,
+    camName: '',
+    camLoc: '',
+    camDir: 'IN',
+    camUrl: ''
+}" x-init="
+    window.openDetails = (plate) => { modalPlate = plate; modalOpen = true; };
+    window.openEditWizard = (id, plate, status) => { editId = id; editPlate = plate; editStatus = status; editOwner = ''; editCompany = ''; editOpen = true; };
+">
+
+    <!-- Left Drawer Navigation -->
+    <aside class="w-64 bg-white border-r border-zinc-200 p-6 flex flex-col gap-6 fixed h-full shadow-sm">
+        <div>
+            <div class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-4">KONTROL PANELİ</div>
+            <nav class="flex flex-col gap-2">
+                <button @click="currentTab = 'dashboard'" :class="currentTab === 'dashboard' ? 'bg-zinc-100 border-l-2 border-indigo-600 text-zinc-900 font-semibold' : 'text-zinc-500 hover:text-zinc-900'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-xs transition-all">
+                    <i class="fas fa-chart-pie text-zinc-400"></i> KONTROL PANELİ
+                </button>
+                <button @click="currentTab = 'vehicles'" :class="currentTab === 'vehicles' ? 'bg-zinc-100 border-l-2 border-indigo-600 text-zinc-900 font-semibold' : 'text-zinc-500 hover:text-zinc-900'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-xs transition-all">
+                    <i class="fas fa-car text-zinc-400"></i> ARAÇ LİSTELERİ
+                </button>
+                <button @click="currentTab = 'logs'" :class="currentTab === 'logs' ? 'bg-zinc-100 border-l-2 border-indigo-600 text-zinc-900 font-semibold' : 'text-zinc-500 hover:text-zinc-900'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-xs transition-all">
+                    <i class="fas fa-history text-zinc-400"></i> GEÇİŞ KAYITLARI
+                </button>
+                <button @click="currentTab = 'settings'" :class="currentTab === 'settings' ? 'bg-zinc-100 border-l-2 border-indigo-600 text-zinc-900 font-semibold' : 'text-zinc-500 hover:text-zinc-900'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-xs transition-all">
+                    <i class="fas fa-cog text-zinc-400"></i> SİSTEM AYARLARI
+                </button>
+            </nav>
+        </div>
+    </aside>
+
+    <!-- Main Content Frame -->
+    <main class="flex-1 ml-64 p-8 min-h-screen flex flex-col gap-6 bg-zinc-50">
+        <!-- Header -->
+        <header class="flex justify-between items-center pb-4 border-b border-zinc-200">
+            <div class="flex items-center gap-3">
+                <img src="/assets/logo.png" alt="SUNAR logo" class="h-8 object-contain">
+                <h1 class="text-sm font-bold tracking-widest text-zinc-950">SUNAR LPR</h1>
+            </div>
+            <div class="flex gap-4">
+                <span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">DB: ONLINE</span>
+                <span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">REDIS: ONLINE</span>
+                <span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">AI: ONLINE</span>
+            </div>
+        </header>
+
+        <!-- Dynamic Container based on Active Tab -->
+        <!-- Tab 1: Dashboard -->
+        <div x-show="currentTab === 'dashboard'" class="flex flex-col gap-6">
+            <!-- HTMX KPI updates -->
+            <div hx-get="/api/html/kpis" hx-trigger="load, every 3s" hx-swap="outerHTML">
+                <div class="text-xs text-zinc-400">KPI kartları yükleniyor...</div>
+            </div>
+
+            <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Canlı Geçiş Kayıtları</h2>
+            
+            <div class="overflow-x-auto border border-zinc-200 rounded-xl bg-white shadow-sm">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-zinc-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">SAAT</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">PLAKA</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">YÖN</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">OCR GÜVEN</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">DURUM</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">KAPI DURUMU</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
+                        </tr>
+                    </thead>
+                    <tbody hx-get="/api/html/logs" hx-trigger="load, every 3s" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
+                        <tr>
+                            <td colspan="7" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 2: Vehicle Lists -->
+        <div x-show="currentTab === 'vehicles'" class="flex flex-col gap-6" x-cloak>
+            <div class="flex justify-between items-center">
+                <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Araç Yönetim Listesi</h2>
+                <button @click="openEditWizard('', '', 'AUTHORIZED')" class="bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg text-xs tracking-wider hover:bg-indigo-700 transition">➕ YENİ ARAÇ EKLE</button>
+            </div>
+            <div class="overflow-x-auto border border-zinc-200 rounded-xl bg-white shadow-sm">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-zinc-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">PLAKA</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">LİSTE DURUMU</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">ARAÇ SAHİBİ</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">FİRMA</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">TİP</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vehicle-table-body" hx-get="/api/html/vehicles" hx-trigger="load, every 4s" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
+                        <tr>
+                            <td colspan="6" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 3: Detailed Logs -->
+        <div x-show="currentTab === 'logs'" class="flex flex-col gap-6" x-cloak>
+            <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Geçiş Kayıtları Geçmişi</h2>
+            <div class="overflow-x-auto border border-zinc-200 rounded-xl bg-white shadow-sm">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-zinc-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">SAAT</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">PLAKA</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">YÖN</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">OCR GÜVEN</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">DURUM</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">KAPI DURUMU</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
+                        </tr>
+                    </thead>
+                    <tbody hx-get="/api/html/logs" hx-trigger="load" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
+                        <tr>
+                            <td colspan="7" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 4: System Settings -->
+        <div x-show="currentTab === 'settings'" class="flex flex-col gap-6" x-cloak>
+            <div class="flex justify-between items-center">
+                <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Sistem Ayarları & Kamera Yönetimi</h2>
+                <button @click="cameraOpen = true" class="bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg text-xs tracking-wider hover:bg-indigo-700 transition">➕ YENİ KAMERA EKLE</button>
+            </div>
+            <div class="overflow-x-auto border border-zinc-200 rounded-xl bg-white shadow-sm">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-zinc-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">KAMERA ADI</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">LOKASYON</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">YÖN</th>
+                            <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">RTSP BAĞLANTISI</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">DURUM</th>
+                            <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
+                        </tr>
+                    </thead>
+                    <tbody id="camera-table-body" hx-get="/api/html/cameras" hx-trigger="load" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
+                        <tr>
+                            <td colspan="6" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Popup for vehicle history -->
+    <div x-show="modalOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
+        <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
+            <h3 class="text-lg font-bold text-zinc-950">Araç Geçmişi: <span x-text="modalPlate"></span></h3>
+            <div class="flex justify-between p-3 bg-zinc-50 rounded-lg text-xs text-zinc-500">
+                <span>İlk Görülme: 16.07.2026</span>
+                <span>Toplam Geçiş: 83</span>
+            </div>
+            <button @click="modalOpen = false" class="w-full bg-zinc-900 text-white py-2 rounded-lg text-xs hover:bg-zinc-800 transition">Kapat</button>
+        </div>
+    </div>
+
+    <!-- Modal for adding/editing vehicles -->
+    <div x-show="editOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
+        <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
+            <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500" x-text="editId ? 'Araç Kaydını Düzenle' : 'Yeni Araç Kaydı'"></h3>
+            
+            <div class="flex flex-col gap-3">
+                <input type="text" placeholder="Plaka (Örn: 34ABC123)" x-model="editPlate" :disabled="editId ? true : false" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                <input type="text" placeholder="Araç Sahibi" x-model="editOwner" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                <input type="text" placeholder="Firma" x-model="editCompany" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                <select x-model="editStatus" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                    <option value="AUTHORIZED">YETKİLİ</option>
+                    <option value="UNAUTHORIZED">YETKİSİZ</option>
+                    <option value="PENDING">BEKLEYEN</option>
+                </select>
+                <select x-model="editType" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                    <option value="PERSONNEL">PERSONEL</option>
+                    <option value="GUEST">MİSAFİR</option>
+                    <option value="LOGISTICS">LOJİSTİK</option>
+                    <option value="VIP">VIP</option>
+                </select>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-4">
+                <button @click="editOpen = false" class="bg-zinc-200 text-zinc-800 px-4 py-2 rounded-lg text-xs font-semibold hover:bg-zinc-300 transition">İptal</button>
+                <button @click="submitVehicleForm()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition">Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for adding camera -->
+    <div x-show="cameraOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
+        <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
+            <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500">Yeni Kamera Tanımla</h3>
+            
+            <div class="flex flex-col gap-3">
+                <input type="text" placeholder="Kamera Adı (Örn: Ana Kapı Giriş)" x-model="camName" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                <input type="text" placeholder="Lokasyon (Örn: Kuzey Nizamiyesi)" x-model="camLoc" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                <select x-model="camDir" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+                    <option value="IN">GİRİŞ (IN)</option>
+                    <option value="OUT">ÇIKIŞ (OUT)</option>
+                </select>
+                <input type="text" placeholder="RTSP URL Bağlantısı" x-model="camUrl" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
+            </div>
+
+            <div class="flex justify-end gap-3 mt-4">
+                <button @click="cameraOpen = false" class="bg-zinc-200 text-zinc-800 px-4 py-2 rounded-lg text-xs font-semibold hover:bg-zinc-300 transition">İptal</button>
+                <button @click="submitCameraForm()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition">Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function submitVehicleForm() {
+            const alpine = document.querySelector('[x-data]').__x.$data;
+            
+            // Acquire OAuth2 Token first
+            const tokenRes = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ username: 'admin', password: 'admin123' })
+            });
+            const tokenData = await tokenRes.json();
+            const token = tokenData.access_token;
+
+            const payload = {
+                plate_number: alpine.editPlate,
+                status: alpine.editStatus,
+                owner_name: alpine.editOwner,
+                company: alpine.editCompany,
+                vehicle_type: alpine.editType,
+                is_active: true
+            };
+
+            let res;
+            if (alpine.editId) {
+                // Update
+                res = await fetch(`/api/vehicles/${alpine.editId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                // Create new
+                res = await fetch('/api/vehicles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(payload)
+                });
+            }
+
+            if (res.ok) {
+                alert('Araç başarıyla kaydedildi.');
+                alpine.editOpen = false;
+                // Trigger HTMX reload
+                htmx.trigger('#vehicle-table-body', 'load');
+            } else {
+                alert('İşlem başarısız oldu.');
+            }
+        }
+
+        async function submitCameraForm() {
+            const alpine = document.querySelector('[x-data]').__x.$data;
+
+            // Auth
+            const tokenRes = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ username: 'admin', password: 'admin123' })
+            });
+            const tokenData = await tokenRes.json();
+            const token = tokenData.access_token;
+
+            const payload = {
+                name: alpine.camName,
+                location: alpine.camLoc,
+                direction: alpine.camDir,
+                rtsp_url: alpine.camUrl,
+                is_active: true
+            };
+
+            const res = await fetch('/api/cameras', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert('Kamera başarıyla eklendi.');
+                alpine.cameraOpen = false;
+                alpine.camName = '';
+                alpine.camLoc = '';
+                alpine.camUrl = '';
+                htmx.trigger('#camera-table-body', 'load');
+            } else {
+                alert('Kamera eklenirken hata oluştu.');
+            }
+        }
+
+        async function deleteCamera(id) {
+            if (!confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) return;
+
+            // Auth
+            const tokenRes = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ username: 'admin', password: 'admin123' })
+            });
+            const tokenData = await tokenRes.json();
+            const token = tokenData.access_token;
+
+            const res = await fetch(`/api/cameras/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                alert('Kamera başarıyla silindi.');
+                htmx.trigger('#camera-table-body', 'load');
+            } else {
+                alert('Silme işlemi başarısız.');
+            }
+        }
+    </script>
+</body>
+</html>

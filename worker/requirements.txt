@@ -1,0 +1,8 @@
+opencv-python-headless>=4.9.0.80
+onnxruntime>=1.17.1
+paddlepaddle>=2.6.0; platform_system != 'Windows'
+paddleocr>=2.7.3
+requests>=2.31.0
+redis>=5.0.3
+structlog>=24.1.0
+numpy>=1.26.4
