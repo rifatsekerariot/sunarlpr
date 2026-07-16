@@ -89,10 +89,17 @@
                 <img src="/assets/logo.png" alt="SUNAR logo" class="h-8 object-contain">
                 <h1 class="text-sm font-bold tracking-widest text-zinc-950">SUNAR LPR</h1>
             </div>
-            <div class="flex gap-4">
+            <div class="flex items-center gap-4">
                 <span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">DB: ONLINE</span>
                 <span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">REDIS: ONLINE</span>
                 <span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">AI: ONLINE</span>
+                <div class="flex items-center gap-2 ml-2 pl-4 border-l border-zinc-200">
+                    <i class="fas fa-user-circle text-zinc-400 text-sm"></i>
+                    <span id="logged-user" class="text-xs font-medium text-zinc-600">—</span>
+                    <button onclick="logout()" class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition uppercase tracking-wider">
+                        <i class="fas fa-sign-out-alt"></i> Çıkış
+                    </button>
+                </div>
             </div>
         </header>
 
@@ -272,6 +279,26 @@
     </div>
 
     <script>
+        // --- Session Guard & User Info ---
+        (function() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                window.location.href = '/';
+                return;
+            }
+            // Decode JWT payload (no verification needed client-side)
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const el = document.getElementById('logged-user');
+                if (el && payload.sub) el.textContent = payload.sub;
+            } catch(e) {}
+        })();
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            window.location.href = '/';
+        }
+
         async function submitVehicleForm() {
             const state = window.getVehicleState();
             
