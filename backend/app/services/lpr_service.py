@@ -40,7 +40,7 @@ class LPRService:
         if vehicle:
             status = vehicle.status
             if vehicle.status == "AUTHORIZED" and vehicle.is_active:
-                if not vehicle.valid_until or vehicle.valid_until > datetime.utcnow():
+                if not vehicle.valid_until or vehicle.valid_until > datetime.now(timezone.utc):
                     is_authorized = True
         else:
             # First time seen: Auto create a PENDING (Bilinmeyen Araç) vehicle
@@ -64,7 +64,7 @@ class LPRService:
             vehicle_id=vehicle.id,
             camera_id=camera_id,
             direction=direction,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             ocr_confidence=ocr_confidence,
             ai_confidence=ai_confidence,
             snapshot_path=snapshot_path,

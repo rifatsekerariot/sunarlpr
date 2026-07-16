@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUNAR LPR - Giriş</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:,">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-zinc-950 relative overflow-hidden">
+
+    <!-- Background Image -->
+    <div class="absolute inset-0 bg-cover bg-center z-0 opacity-40" style="background-image: url('/assets/login_bg.png'); filter: blur(2px);"></div>
+    <div class="absolute inset-0 bg-gradient-to-tr from-zinc-950 via-zinc-950/90 to-zinc-900/50 z-10"></div>
+
+    <!-- Login Card -->
+    <div class="bg-white/95 backdrop-blur-md p-8 rounded-2xl w-[400px] max-w-full border border-zinc-200/50 shadow-2xl z-20 flex flex-col gap-6">
+        <div class="flex flex-col items-center gap-3">
+            <img src="/assets/logo.png" alt="SUNAR logo" class="h-10 object-contain">
+            <h1 class="text-sm font-bold tracking-widest text-zinc-950 uppercase mt-2">SUNAR LPR SİSTEMİ</h1>
+            <p class="text-xs text-zinc-500">Operatör kontrol paneli oturum açma</p>
+        </div>
+
+        <div class="flex flex-col gap-3">
+            <div>
+                <label class="block text-[11px] font-bold text-zinc-500 uppercase mb-1">Kullanıcı Adı</label>
+                <input id="username" type="text" placeholder="Kullanıcı adı girin"
+                    class="border border-zinc-200 rounded-lg p-2.5 text-sm w-full bg-zinc-50 text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-zinc-500 uppercase mb-1">Şifre</label>
+                <input id="password" type="password" placeholder="••••••••"
+                    class="border border-zinc-200 rounded-lg p-2.5 text-sm w-full bg-zinc-50 text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+        </div>
+
+        <div id="error-msg" class="hidden p-2.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg font-medium"></div>
+
+        <button onclick="submitLogin()"
+            class="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-bold py-3 rounded-lg text-xs tracking-wider transition">
+            GİRİŞ YAP
+        </button>
+    </div>
+
+    <script>
+        // Enter key support
+        document.getElementById('password').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') submitLogin();
+        });
+        document.getElementById('username').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') submitLogin();
+        });
+
+        async function submitLogin() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('error-msg');
+            errorEl.classList.add('hidden');
+
+            if (!username || !password) {
+                errorEl.textContent = 'Kullanıcı adı ve şifre boş bırakılamaz.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem('access_token', data.access_token);
+                    window.location.href = '/dashboard';
+                } else {
+                    errorEl.textContent = 'Hatalı kullanıcı adı veya şifre!';
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorEl.textContent = 'Sunucuya bağlanılamadı.';
+                errorEl.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

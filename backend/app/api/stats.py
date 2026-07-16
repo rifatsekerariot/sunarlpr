@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.core.database import get_db_session
 from app.models.models import AccessLog, Vehicle, Camera
 from app.api.auth import get_current_user
@@ -15,7 +15,7 @@ async def get_dashboard_stats(
     current_user = Depends(get_current_user)
 ):
     # Today range
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Counts using SQLAlchemy queries
     in_today = await db.scalar(
@@ -63,7 +63,7 @@ async def get_hourly_load(
     current_user = Depends(get_current_user)
 ):
     # Retrieve past 24 hours of traffic grouped by hour
-    since_time = datetime.utcnow() - timedelta(hours=24)
+    since_time = datetime.now(timezone.utc) - timedelta(hours=24)
     stmt = (
         select(
             func.extract("hour", AccessLog.timestamp).label("hour"),

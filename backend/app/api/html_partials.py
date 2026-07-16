@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, or_
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.database import get_db_session
 from app.models.models import AccessLog, Vehicle, Camera
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/html", tags=["HTML Partials"])
 
 @router.get("/kpis", response_class=HTMLResponse)
 async def get_kpis_html(db: AsyncSession = Depends(get_db_session)):
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     in_today = await db.scalar(select(func.count(AccessLog.id)).filter(AccessLog.timestamp >= today_start, AccessLog.direction == "IN")) or 0
     out_today = await db.scalar(select(func.count(AccessLog.id)).filter(AccessLog.timestamp >= today_start, AccessLog.direction == "OUT")) or 0
     auth_vehicles = await db.scalar(select(func.count(Vehicle.id)).filter(Vehicle.status == "AUTHORIZED", Vehicle.is_active == True)) or 0

@@ -99,7 +99,9 @@ class PlateDetector:
                 confidences.append(float(conf))
                 
         # NMS to clear redundant overlaps
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, self.conf_threshold, 0.45)
+        # Convert [x1, y1, x2, y2] to [x1, y1, width, height] for NMSBoxes
+        nms_boxes = [[b[0], b[1], b[2] - b[0], b[3] - b[1]] for b in boxes]
+        indices = cv2.dnn.NMSBoxes(nms_boxes, confidences, self.conf_threshold, self.nms_threshold)
         
         results = []
         if len(indices) > 0:

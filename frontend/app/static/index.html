@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SUNAR LPR</title>
     <!-- Google Fonts & Tailwind CDN & FontAwesome & HTMX & Alpine.js -->
+    <link rel="icon" href="data:,">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -55,6 +56,8 @@
 }" x-init="
     window.openDetails = (plate) => { modalPlate = plate; modalOpen = true; };
     window.openEditWizard = (id, plate, status) => { editId = id; editPlate = plate; editStatus = status; editOwner = ''; editCompany = ''; editOpen = true; };
+    window.getVehicleState = () => { return { id: editId, plate: editPlate, status: editStatus, owner: editOwner, company: editCompany, type: editType, close: () => { editOpen = false; } }; };
+    window.getCameraState = () => { return { name: camName, location: camLoc, direction: camDir, url: camUrl, close: () => { cameraOpen = false; }, clear: () => { camName = ''; camLoc = ''; camUrl = ''; } }; };
 ">
 
     <!-- Left Drawer Navigation -->
@@ -270,30 +273,29 @@
 
     <script>
         async function submitVehicleForm() {
-            const alpine = document.querySelector('[x-data]').__x.$data;
+            const state = window.getVehicleState();
             
-            // Acquire OAuth2 Token first
-            const tokenRes = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ username: 'admin', password: 'admin123' })
-            });
-            const tokenData = await tokenRes.json();
-            const token = tokenData.access_token;
+            // Read Token from LocalStorage
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('Oturum sonlandı, lütfen tekrar giriş yapın.');
+                window.location.href = '/';
+                return;
+            }
 
             const payload = {
-                plate_number: alpine.editPlate,
-                status: alpine.editStatus,
-                owner_name: alpine.editOwner,
-                company: alpine.editCompany,
-                vehicle_type: alpine.editType,
+                plate_number: state.plate,
+                status: state.status,
+                owner_name: state.owner,
+                company: state.company,
+                vehicle_type: state.type,
                 is_active: true
             };
 
             let res;
-            if (alpine.editId) {
+            if (state.id) {
                 // Update
-                res = await fetch(`/api/vehicles/${alpine.editId}`, {
+                res = await fetch(`/api/vehicles/${state.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify(payload)
@@ -309,8 +311,7 @@
 
             if (res.ok) {
                 alert('Araç başarıyla kaydedildi.');
-                alpine.editOpen = false;
-                // Trigger HTMX reload
+                state.close();
                 htmx.trigger('#vehicle-table-body', 'load');
             } else {
                 alert('İşlem başarısız oldu.');
@@ -318,22 +319,20 @@
         }
 
         async function submitCameraForm() {
-            const alpine = document.querySelector('[x-data]').__x.$data;
+            const state = window.getCameraState();
 
-            // Auth
-            const tokenRes = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ username: 'admin', password: 'admin123' })
-            });
-            const tokenData = await tokenRes.json();
-            const token = tokenData.access_token;
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('Oturum sonlandı, lütfen tekrar giriş yapın.');
+                window.location.href = '/';
+                return;
+            }
 
             const payload = {
-                name: alpine.camName,
-                location: alpine.camLoc,
-                direction: alpine.camDir,
-                rtsp_url: alpine.camUrl,
+                name: state.name,
+                location: state.location,
+                direction: state.direction,
+                rtsp_url: state.url,
                 is_active: true
             };
 
@@ -345,10 +344,8 @@
 
             if (res.ok) {
                 alert('Kamera başarıyla eklendi.');
-                alpine.cameraOpen = false;
-                alpine.camName = '';
-                alpine.camLoc = '';
-                alpine.camUrl = '';
+                state.close();
+                state.clear();
                 htmx.trigger('#camera-table-body', 'load');
             } else {
                 alert('Kamera eklenirken hata oluştu.');
@@ -358,14 +355,12 @@
         async function deleteCamera(id) {
             if (!confirm('Bu kamerayı silmek istediğinizden emin misiniz?')) return;
 
-            // Auth
-            const tokenRes = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ username: 'admin', password: 'admin123' })
-            });
-            const tokenData = await tokenRes.json();
-            const token = tokenData.access_token;
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('Oturum sonlandı, lütfen tekrar giriş yapın.');
+                window.location.href = '/';
+                return;
+            }
 
             const res = await fetch(`/api/cameras/${id}`, {
                 method: 'DELETE',

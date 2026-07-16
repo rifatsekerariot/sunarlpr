@@ -1,7 +1,7 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 app = FastAPI(title="SUNAR HTML Frontend")
 
@@ -10,10 +10,15 @@ media_path = "/app/media"
 if os.path.exists(media_path):
     app.mount("/media", StaticFiles(directory=media_path), name="media")
 
-# Serve index.html globally on root path
-@app.get("/")
-async def serve_index():
-    return FileResponse("/app/app/static/index.html")
+# Serve static directory containing assets
+app.mount("/assets", StaticFiles(directory="/app/app/static/assets"), name="assets")
 
-# Ensure static files mount does not collide
-app.mount("/", StaticFiles(directory="/app/app/static"), name="static")
+# Route root to login page
+@app.get("/")
+async def serve_login():
+    return FileResponse("/app/app/static/login.html")
+
+# Route /dashboard to main app dashboard
+@app.get("/dashboard")
+async def serve_dashboard():
+    return FileResponse("/app/app/static/index.html")

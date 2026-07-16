@@ -24,7 +24,8 @@ def send_detection_to_backend(
     dir_path = os.path.join(worker_config.MEDIA_ROOT, today_str, camera_id, plate_number)
     os.makedirs(dir_path, exist_ok=True)
     
-    timestamp_str = datetime.datetime.utcnow().strftime("%H%M%S_%f")
+    from datetime import timezone
+    timestamp_str = datetime.datetime.now(timezone.utc).strftime("%H%M%S_%f")
     snapshot_filename = f"vehicle_{timestamp_str}.jpg"
     crop_filename = f"plate_{timestamp_str}.jpg"
     

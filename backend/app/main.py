@@ -42,7 +42,13 @@ app = FastAPI(
 # Enable CORS for frontend and nginx routing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost",
+        "https://sunar.ariot.com.tr",
+        "http://sunar.ariot.com.tr",
+        "http://127.0.0.1",
+        "http://200.97.171.59"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,8 +63,10 @@ app.include_router(cameras_router, prefix="/api")
 app.include_router(vehicles_router, prefix="/api")
 app.include_router(access_logs_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
-app.include_router(html_router)
+app.include_router(html_router, prefix="/api")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": logger.info("Health check endpoint hit")}
+    from datetime import datetime, timezone
+    logger.info("Health check endpoint hit")
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
