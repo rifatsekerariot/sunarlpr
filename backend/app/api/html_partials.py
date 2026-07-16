@@ -130,3 +130,47 @@ async def get_cameras_html(db: AsyncSession = Depends(get_db_session)):
         </tr>
         """
     return rows
+
+@router.get("/live-monitor", response_class=HTMLResponse)
+async def get_live_monitor_html(db: AsyncSession = Depends(get_db_session)):
+    """Returns last 4 detections with snapshot for the live camera monitor panel."""
+    result = await db.execute(
+        select(AccessLog).order_by(AccessLog.timestamp.desc()).limit(4)
+    )
+    logs = result.scalars().all()
+
+    if not logs:
+        return """
+        <div class="flex flex-col items-center justify-center h-full gap-2 text-zinc-400">
+            <i class="fas fa-video-slash text-2xl"></i>
+            <span class="text-xs">Henüz tespit yok</span>
+        </div>
+        """
+
+    cards = ""
+    for log in logs:
+        authorized = log.is_authorized
+        border_color = "border-emerald-400" if authorized else "border-red-400"
+        badge_bg = "bg-emerald-500" if authorized else "bg-red-500"
+        badge_text = "YETKİLİ" if authorized else "BİLİNMEYEN"
+        # Use plate_crop_path if exists, fallback to snapshot_path
+        img_path = log.plate_crop_path or log.snapshot_path or ""
+        img_tag = f'<img src="{img_path}" class="w-full h-14 object-cover rounded" onerror="this.style.display=\'none\'">' if img_path else ""
+
+        ts = log.timestamp.astimezone(timezone.utc).strftime("%H:%M:%S")
+
+        cards += f"""
+        <div class="border-2 {border_color} rounded-xl overflow-hidden bg-white shadow-sm flex flex-col">
+            <div class="bg-zinc-900 px-3 py-1.5 flex justify-between items-center">
+                <span class="text-white font-bold tracking-widest text-sm">{log.plate_number}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full {badge_bg} text-white font-semibold">{badge_text}</span>
+            </div>
+            {img_tag}
+            <div class="px-3 py-1 text-[10px] text-zinc-400 flex justify-between">
+                <span>{log.direction}</span>
+                <span>{ts}</span>
+            </div>
+        </div>
+        """
+
+    return f'<div class="grid grid-cols-2 gap-3 h-full">{cards}</div>'

@@ -111,7 +111,30 @@
                 <div class="text-xs text-zinc-400">KPI kartları yükleniyor...</div>
             </div>
 
+            <!-- Live Camera Monitor Panel -->
+            <div class="flex gap-6">
+                <!-- Live Detection Cards -->
+                <div class="flex-1 border border-zinc-200 rounded-xl bg-white shadow-sm p-4 flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <h2 class="text-[11px] font-bold tracking-widest uppercase text-zinc-500">Canlı Kamera Monitörü</h2>
+                        </div>
+                        <span class="text-[10px] text-zinc-400">Her 3sn güncellenir</span>
+                    </div>
+                    <div class="min-h-[160px]"
+                         hx-get="/api/html/live-monitor"
+                         hx-trigger="load, every 3s"
+                         hx-swap="innerHTML">
+                        <div class="flex items-center justify-center h-[160px] text-xs text-zinc-400">
+                            <i class="fas fa-spinner fa-spin mr-2"></i> Yükleniyor...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Canlı Geçiş Kayıtları</h2>
+
             
             <div class="overflow-x-auto border border-zinc-200 rounded-xl bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-zinc-200">
