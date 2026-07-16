@@ -133,7 +133,14 @@
         <!-- Tab 1: Dashboard -->
         <div x-show="currentTab === 'dashboard'" class="flex flex-col gap-6">
             <!-- HTMX KPI updates -->
-            <div id="dashboard-kpis-container" hx-get="/api/html/kpis" hx-trigger="load, every 3s" hx-swap="outerHTML">
+            <div class="flex justify-between items-center -mb-4">
+                <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Genel Durum Göstergeleri</h2>
+                <button onclick="triggerAllRefreshes()" class="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition uppercase tracking-wider">
+                    <i class="fas fa-sync-alt"></i> Verileri Yenile
+                </button>
+            </div>
+
+            <div id="dashboard-kpis-container" hx-get="/api/html/kpis" hx-trigger="load, reloadKPIs from:body" hx-swap="outerHTML">
                 <div class="text-xs text-zinc-400">KPI kartları yükleniyor...</div>
             </div>
 
@@ -146,11 +153,10 @@
                             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                             <h2 class="text-[11px] font-bold tracking-widest uppercase text-zinc-500">Canlı Kamera Monitörü</h2>
                         </div>
-                        <span class="text-[10px] text-zinc-400">Her 3sn güncellenir</span>
                     </div>
                     <div id="live-monitor-container" class="min-h-[160px]"
                          hx-get="/api/html/live-monitor"
-                         hx-trigger="load, every 3s"
+                         hx-trigger="load, reloadMonitor from:body"
                          hx-swap="innerHTML">
                         <div class="flex items-center justify-center h-[160px] text-xs text-zinc-400">
                             <i class="fas fa-spinner fa-spin mr-2"></i> Yükleniyor...
@@ -161,7 +167,6 @@
 
             <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Canlı Geçiş Kayıtları</h2>
 
-            
             <div class="overflow-x-auto border border-zinc-200 rounded-xl bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-zinc-200">
                     <thead class="bg-zinc-50">
@@ -175,7 +180,7 @@
                             <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
                         </tr>
                     </thead>
-                    <tbody id="live-logs-table-body" hx-get="/api/html/logs" hx-trigger="load, every 3s" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
+                    <tbody id="live-logs-table-body" hx-get="/api/html/logs" hx-trigger="load, reloadLogs from:body" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
                         <tr>
                             <td colspan="7" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
                         </tr>
@@ -384,10 +389,10 @@
         }
 
         function triggerAllRefreshes() {
+            htmx.trigger('body', 'reloadKPIs');
+            htmx.trigger('body', 'reloadMonitor');
+            htmx.trigger('body', 'reloadLogs');
             htmx.trigger('#vehicle-table-body', 'load');
-            htmx.trigger('#dashboard-kpis-container', 'load');
-            htmx.trigger('#live-monitor-container', 'load');
-            htmx.trigger('#live-logs-table-body', 'load');
         }
 
         async function submitVehicleForm() {
