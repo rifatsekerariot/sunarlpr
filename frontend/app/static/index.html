@@ -58,6 +58,7 @@
     editCompany: '',
     editType: 'PERSONNEL',
     cameraOpen: false,
+    camId: '',
     camName: '',
     camLoc: '',
     camDir: 'IN',
@@ -65,8 +66,9 @@
 }" x-init="
     window.openDetails = (plate) => { modalPlate = plate; modalOpen = true; };
     window.openEditWizard = (id, plate, status) => { editId = id; editPlate = plate; editStatus = status; editOwner = ''; editCompany = ''; editOpen = true; };
+    window.openCameraEditWizard = (id, name, location, direction, url) => { camId = id; camName = name; camLoc = location; camDir = direction; camUrl = url; cameraOpen = true; };
     window.getVehicleState = () => { return { id: editId, plate: editPlate, status: editStatus, owner: editOwner, company: editCompany, type: editType, close: () => { editOpen = false; } }; };
-    window.getCameraState = () => { return { name: camName, location: camLoc, direction: camDir, url: camUrl, close: () => { cameraOpen = false; }, clear: () => { camName = ''; camLoc = ''; camUrl = ''; } }; };
+    window.getCameraState = () => { return { id: camId, name: camName, location: camLoc, direction: camDir, url: camUrl, close: () => { cameraOpen = false; }, clear: () => { camId = ''; camName = ''; camLoc = ''; camUrl = ''; } }; };
 ">
 
     <!-- Left Drawer Navigation -->
@@ -291,7 +293,7 @@
     <!-- Modal for adding camera -->
     <div x-show="cameraOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
         <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
-            <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500">Yeni Kamera Tanımla</h3>
+            <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500" x-text="camId ? 'Kamerayı Düzenle' : 'Yeni Kamera Tanımla'"></h3>
             
             <div class="flex flex-col gap-3">
                 <input type="text" placeholder="Kamera Adı (Örn: Ana Kapı Giriş)" x-model="camName" class="border border-zinc-200 rounded p-2.5 text-sm w-full bg-zinc-50">
@@ -304,7 +306,7 @@
             </div>
 
             <div class="flex justify-end gap-3 mt-4">
-                <button @click="cameraOpen = false" class="bg-zinc-200 text-zinc-800 px-4 py-2 rounded-lg text-xs font-semibold hover:bg-zinc-300 transition">İptal</button>
+                <button @click="cameraOpen = false; window.getCameraState().clear();" class="bg-zinc-200 text-zinc-800 px-4 py-2 rounded-lg text-xs font-semibold hover:bg-zinc-300 transition">İptal</button>
                 <button @click="submitCameraForm()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition">Kaydet</button>
             </div>
         </div>
@@ -395,19 +397,28 @@
                 is_active: true
             };
 
-            const res = await fetch('/api/cameras', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(payload)
-            });
+            let res;
+            if (state.id) {
+                res = await fetch(`/api/cameras/${state.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                res = await fetch('/api/cameras', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(payload)
+                });
+            }
 
             if (res.ok) {
-                alert('Kamera başarıyla eklendi.');
+                alert(state.id ? 'Kamera başarıyla güncellendi.' : 'Kamera başarıyla eklendi.');
                 state.close();
                 state.clear();
                 htmx.trigger('#camera-table-body', 'load');
             } else {
-                alert('Kamera eklenirken hata oluştu.');
+                alert('İşlem sırasında hata oluştu.');
             }
         }
 

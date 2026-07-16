@@ -131,9 +131,9 @@ async def get_cameras_html(db: AsyncSession = Depends(get_db_session)):
                       hx-swap="outerHTML"
                       hx-headers='{{"Authorization": "Bearer " + localStorage.getItem("access_token")}}'
                       class="text-[10px] text-zinc-400">kontrol ediliyor...</span>
-            </td>
-            <td class="px-6 py-4 text-center">
-                <button class="px-2.5 py-1 text-xs border border-red-200 rounded bg-red-50 text-red-700 hover:bg-red-100 transition-colors" onclick="deleteCamera('{c.id}')">Sil</button>
+            <td class="px-6 py-4 text-center flex justify-center gap-2">
+                <button class="px-2 py-1 text-xs border border-zinc-200 rounded bg-white text-zinc-700 hover:bg-zinc-50 transition-colors" onclick="openCameraEditWizard('{c.id}', '{c.name}', '{c.location}', '{c.direction}', '{c.rtsp_url}')">Düzenle</button>
+                <button class="px-2 py-1 text-xs border border-red-200 rounded bg-red-50 text-red-700 hover:bg-red-100 transition-colors" onclick="deleteCamera('{c.id}')">Sil</button>
             </td>
         </tr>
         """
