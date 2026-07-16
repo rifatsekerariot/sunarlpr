@@ -63,6 +63,7 @@ class AccessLog(Base):
     operator_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     gate_opened: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_needed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     camera = relationship("Camera", back_populates="logs")
     vehicle = relationship("Vehicle", back_populates="logs")

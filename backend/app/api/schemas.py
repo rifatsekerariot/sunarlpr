@@ -85,6 +85,7 @@ class DetectionRequest(BaseModel):
     ai_confidence: float
     snapshot_path: str
     plate_crop_path: str
+    review_needed: bool = False
 
 class AccessLogResponse(BaseModel):
     id: UUID
@@ -101,6 +102,7 @@ class AccessLogResponse(BaseModel):
     operator_id: UUID | None
     gate_opened: bool
     notes: str | None
+    review_needed: bool
 
     class Config:
         from_attributes = True

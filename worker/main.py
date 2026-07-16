@@ -1,173 +1,337 @@
 import os
-import cv2
 import time
+import cv2
 import requests
-import datetime
+import numpy as np
+import redis
+import json
 import structlog
-from config import worker_config
-from detector import PlateDetector
 from ocr import PlateOCR
 
-setup_logger = structlog.get_logger()
+# Configure structured logger
+logger = structlog.get_logger()
 
-def send_detection_to_backend(
-    plate_number: str,
-    camera_id: str,
-    direction: str,
-    ocr_confidence: float,
-    ai_confidence: float,
-    frame: cv2.Mat,
-    crop: cv2.Mat
-):
-    # Prepare folder structure: media/YYYY-MM-DD/camera_id/plate_number/
-    today_str = datetime.date.today().isoformat()
-    dir_path = os.path.join(worker_config.MEDIA_ROOT, today_str, camera_id, plate_number)
-    os.makedirs(dir_path, exist_ok=True)
-    
-    from datetime import timezone
-    timestamp_str = datetime.datetime.now(timezone.utc).strftime("%H%M%S_%f")
-    snapshot_filename = f"vehicle_{timestamp_str}.jpg"
-    crop_filename = f"plate_{timestamp_str}.jpg"
-    
-    snapshot_full_path = os.path.join(dir_path, snapshot_filename)
-    crop_full_path = os.path.join(dir_path, crop_filename)
-    
-    # Save files on disk
-    cv2.imwrite(snapshot_full_path, frame)
-    cv2.imwrite(crop_full_path, crop)
-    
-    # Paths for API (relative to media root)
-    api_snapshot_path = f"/media/{today_str}/{camera_id}/{plate_number}/{snapshot_filename}"
-    api_crop_path = f"/media/{today_str}/{camera_id}/{plate_number}/{crop_filename}"
-    
-    payload = {
-        "plate_number": plate_number,
-        "camera_id": camera_id,
-        "direction": direction,
-        "ocr_confidence": ocr_confidence,
-        "ai_confidence": ai_confidence,
-        "snapshot_path": api_snapshot_path,
-        "plate_crop_path": api_crop_path
-    }
-    
-    try:
-        url = f"{worker_config.BACKEND_API_URL}/api/access-logs/detect"
-        response = requests.post(url, json=payload, timeout=5)
-        if response.status_code == 201:
-            setup_logger.info("Detection logged successfully", plate=plate_number)
+# Environment variables
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://127.0.0.1:8000")
+REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+LPR_WORKER_API_KEY = os.getenv("LPR_WORKER_API_KEY", "ariot-lpr-worker-shared-secure-token-2026")
+
+# Initialize Redis client
+try:
+    r_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, socket_timeout=3)
+    r_client.ping()
+    logger.info("Connected to Redis successfully")
+except Exception as err:
+    logger.error("Failed to connect to Redis", error=str(err))
+    r_client = None
+
+
+def compute_iou(box1, box2):
+    xA = max(box1[0], box2[0])
+    yA = max(box1[1], box2[1])
+    xB = min(box1[2], box2[2])
+    yB = min(box1[3], box2[3])
+
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    boxAArea = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    boxBArea = (box2[2] - box2[0]) * (box2[3] - box2[1])
+
+    if float(boxAArea + boxBArea - interArea) == 0:
+        return 0.0
+
+    iou = interArea / float(boxAArea + boxBArea - interArea)
+    return iou
+
+
+class CentroidTracker:
+    def __init__(self, max_disappeared=15, max_window_size=12):
+        self.next_object_id = 0
+        self.objects = {}       # id -> last bounding box
+        self.disappeared = {}   # id -> frames count
+        self.voting_cache = {}  # id -> dict of candidates
+        self.sent_plates = {}   # id -> set of plates already posted
+        self.total_frames_tracked = {} # id -> total valid frames processed
+        self.max_disappeared = max_disappeared
+        self.max_window_size = max_window_size
+
+    def register(self, bbox):
+        self.objects[self.next_object_id] = bbox
+        self.disappeared[self.next_object_id] = 0
+        self.voting_cache[self.next_object_id] = {}
+        self.sent_plates[self.next_object_id] = set()
+        self.total_frames_tracked[self.next_object_id] = 0
+        self.next_object_id += 1
+        return self.next_object_id - 1
+
+    def deregister(self, object_id):
+        del self.objects[object_id]
+        del self.disappeared[object_id]
+        self.sent_plates.pop(object_id, None)
+        self.total_frames_tracked.pop(object_id, None)
+        return self.voting_cache.pop(object_id, {})
+
+    def update(self, detected_bboxes):
+        deregistered_reports = []
+
+        if len(detected_bboxes) == 0:
+            for object_id in list(self.objects.keys()):
+                self.disappeared[object_id] += 1
+                if self.disappeared[object_id] > self.max_disappeared:
+                    report = self.deregister(object_id)
+                    if report:
+                        deregistered_reports.append((object_id, report))
+            return [], deregistered_reports
+
+        input_ids = list(self.objects.keys())
+        input_bboxes = list(self.objects.values())
+
+        if len(self.objects) == 0:
+            for bbox in detected_bboxes:
+                self.register(bbox)
         else:
-            setup_logger.error("Failed to post detection", status=response.status_code, body=response.text)
-    except Exception as e:
-        setup_logger.error("Error communicating with backend API", error=str(e))
+            matched_indices = []
+            for d_bbox in detected_bboxes:
+                best_iou = 0.0
+                best_id = -1
+                for o_idx, o_id in enumerate(input_ids):
+                    iou = compute_iou(input_bboxes[o_idx], d_bbox)
+                    if iou > best_iou and iou > 0.15:
+                        best_id = o_id
+                        best_iou = iou
 
-def run_worker():
-    setup_logger.info("Starting LPR camera worker loop")
-    detector = PlateDetector()
+                if best_id != -1 and best_id not in matched_indices:
+                    self.objects[best_id] = d_bbox
+                    self.disappeared[best_id] = 0
+                    matched_indices.append(best_id)
+                else:
+                    self.register(d_bbox)
+
+            for o_id in input_ids:
+                if o_id not in matched_indices:
+                    self.disappeared[o_id] += 1
+                    if self.disappeared[o_id] > self.max_disappeared:
+                        report = self.deregister(o_id)
+                        if report:
+                            deregistered_reports.append((o_id, report))
+
+        active = [(o_id, bbox) for o_id, bbox in self.objects.items()]
+        return active, deregistered_reports
+
+
+def authenticate_worker():
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            url = f"{BACKEND_API_URL}/health"
+            res = requests.get(url, timeout=3)
+            if res.status_code == 200:
+                logger.info("Worker authenticated successfully with Backend API")
+                return True
+        except Exception as e:
+            logger.warning("Backend API authentication attempt failed", attempt=attempt, error=str(e))
+        time.sleep(2)
+    return False
+
+
+def get_active_cameras():
+    try:
+        url = f"{BACKEND_API_URL}/api/cameras"
+        res = requests.get(url, timeout=3)
+        if res.status_code == 200:
+            return res.json()
+    except Exception as e:
+        logger.error("Failed to load active cameras", error=str(e))
+    return [{"id": "925c682d-5835-41c3-a4d6-d7bbc4ee914a", "name": "TEST", "url": "rtsp://admin:Adanarft@192.168.1.64:554/Streaming/Channels/101"}]
+
+
+def send_plate_to_backend(plate, confidence, crop_img, review_needed, camera_id):
+    try:
+        if crop_img is not None and crop_img.size > 0:
+            _, buffer = cv2.imencode('.jpg', crop_img)
+            import base64
+            img_b64 = base64.b64encode(buffer).decode('utf-8')
+        else:
+            img_b64 = None
+
+        payload = {
+            "plate_number": plate,
+            "confidence": float(confidence),
+            "camera_id": camera_id,
+            "direction": "IN",
+            "ocr_confidence": float(confidence),
+            "ai_confidence": float(confidence),
+            "snapshot_path": "pending_snapshot.jpg",
+            "plate_crop_path": "pending_crop.jpg",
+            "review_needed": bool(review_needed)
+        }
+        headers = {
+            "X-API-KEY": LPR_WORKER_API_KEY
+        }
+        url = f"{BACKEND_API_URL}/api/access-logs/detect"
+        res = requests.post(url, json=payload, headers=headers, timeout=5)
+        if res.status_code == 201:
+            logger.info("Detection logged successfully", plate=plate, review=review_needed)
+            return True
+        else:
+            logger.error("Failed to log detection", code=res.status_code, body=res.text)
+    except Exception as e:
+        logger.error("Error sending detection to backend", error=str(e))
+    return False
+
+
+def main():
+    if not authenticate_worker():
+        logger.error("Worker authentication failed. Exiting.")
+        return
+
     ocr_engine = PlateOCR()
-    
-    # Authenticate and get Token from backend API
-    headers = {}
-    try:
-        login_url = f"{worker_config.BACKEND_API_URL}/api/auth/login"
-        login_res = requests.post(
-            login_url, 
-            data={"username": "admin", "password": "admin123"},
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=5
-        )
-        if login_res.status_code == 200:
-            token = login_res.json().get("access_token")
-            headers["Authorization"] = f"Bearer {token}"
-            setup_logger.info("Worker authenticated successfully with Backend API")
-        else:
-            setup_logger.error("Worker authentication failed", status=login_res.status_code)
-    except Exception as e:
-        setup_logger.error("Error authenticating worker", error=str(e))
+    tracker = CentroidTracker(max_disappeared=15, max_window_size=12)
 
-    # Fetch active cameras dynamically from backend API
-    cameras = {}
-    try:
-        url = f"{worker_config.BACKEND_API_URL}/api/cameras"
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            for cam in response.json():
-                if cam["is_active"]:
-                    cameras[cam["id"]] = {
-                        "name": cam["name"],
-                        "rtsp_url": cam["rtsp_url"],
-                        "direction": cam["direction"]
-                    }
-            setup_logger.info("Loaded active cameras from backend API", count=len(cameras))
-        else:
-            setup_logger.error("Failed to load cameras from backend API", status=response.status_code)
-    except Exception as e:
-        setup_logger.error("Error fetching cameras from backend", error=str(e))
+    cameras = get_active_cameras()
+    cam = cameras[0]
+    camera_url = cam["url"]
+    camera_id = cam["id"]
 
-    # Fallback to config if API fails or returns no active cameras
-    if not cameras:
-        setup_logger.warning("No cameras loaded from API, falling back to local config")
-        cameras = worker_config.CAMERAS
-    
-    # Open streams/captures
-    caps = {}
-    for cam_id, info in cameras.items():
-        rtsp_url = info["rtsp_url"]
-        if rtsp_url == "simulation_rtsp_url" or not rtsp_url:
-            setup_logger.warning("No valid RTSP URL configured — camera skipped", camera=info["name"])
-            caps[cam_id] = "NO_STREAM"
-        else:
-            cap = cv2.VideoCapture(rtsp_url)
-            if cap.isOpened():
-                caps[cam_id] = cap
-                setup_logger.info("Stream opened successfully", camera=info["name"], url=rtsp_url)
-            else:
-                caps[cam_id] = "NO_STREAM"
-                setup_logger.warning("Failed to open stream — camera skipped", camera=info["name"])
+    logger.info("Starting LPR camera worker loop")
+    cap = cv2.VideoCapture(camera_url)
+    if not cap.isOpened():
+        logger.error("Failed to open camera RTSP stream", url=camera_url)
+        return
 
     frame_count = 0
-    frame_skip = 5 # Run inference every 5 frames to optimize CPU utilization
+    frame_skip = 4
 
-    try:
-        while True:
-            for cam_id, cap in caps.items():
-                cam_info = cameras[cam_id]
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            logger.warning("RTSP stream frame capture failure. Reconnecting...")
+            time.sleep(2)
+            cap = cv2.VideoCapture(camera_url)
+            continue
+
+        frame_count += 1
+        if frame_count % frame_skip != 0:
+            continue
+
+        plate, confidence, crop_img, review_needed = ocr_engine.read_plate(frame)
+
+        detected_bboxes = []
+        # Rule 1: Only count votes where individual OCR confidence >= 0.85
+        if plate and confidence >= 0.85 and crop_img is not None:
+            h, w = frame.shape[:2]
+            detected_bboxes.append([w // 4, h // 4, w * 3 // 4, h * 3 // 4])
+
+        active_trackers, deregistered_reports = tracker.update(detected_bboxes)
+
+        # 1. Update active tracker caches with weighted scoring and FIFO sliding window (max 12)
+        if detected_bboxes and active_trackers:
+            matched_id = active_trackers[-1][0]
+            cache = tracker.voting_cache[matched_id]
+            
+            # Increment total valid frames count for this vehicle
+            tracker.total_frames_tracked[matched_id] += 1
+            total_valid_frames = tracker.total_frames_tracked[matched_id]
+
+            if plate not in cache:
+                cache[plate] = {"count": 0, "sum_conf": 0.0, "review": False, "crop": crop_img}
+            
+            cache[plate]["count"] += 1
+            cache[plate]["sum_conf"] += confidence
+            if review_needed:
+                cache[plate]["review"] = True
+
+            # FIFO Sliding Window logic: if total valid frames exceeds 12, decay older candidate counts proportionally
+            if total_valid_frames > tracker.max_window_size:
+                for p_key in list(cache.keys()):
+                    if cache[p_key]["count"] > 0:
+                        cache[p_key]["count"] -= 1
+                        # Adjust sum_conf to reflect decayed count
+                        cache[p_key]["sum_conf"] *= (cache[p_key]["count"] / (cache[p_key]["count"] + 1))
+
+            # Hybrid Trigger: If a candidate has >= 5 votes, check if it dominates the oylama
+            freq = cache[plate]["count"]
+            if freq >= 5 and plate not in tracker.sent_plates[matched_id]:
+                # Calculate active candidate weight comparison (Ambiguity Check)
+                candidates_list = []
+                for p_str, info in cache.items():
+                    c_freq = info["count"]
+                    if c_freq > 0:
+                        avg_c_conf = info["sum_conf"] / c_freq
+                        weight = avg_c_conf * np.log(c_freq + 1)
+                        candidates_list.append((p_str, weight, info))
                 
-                if cap == "NO_STREAM":
-                    # Stream could not be opened — skip, do not generate mock data
-                    time.sleep(5.0)
-                    continue
+                candidates_list.sort(key=lambda x: x[1], reverse=True)
+                
+                if candidates_list:
+                    top_plate, top_weight, top_info = candidates_list[0]
+                    # Only trigger if the top plate is indeed the one that reached 5 votes
+                    if top_plate == plate:
+                        # Ambiguity check: if 2nd candidate is within 15% of top weight, flag review_needed
+                        is_ambiguous = False
+                        if len(candidates_list) > 1:
+                            runner_plate, runner_weight, _ = candidates_list[1]
+                            if (top_weight - runner_weight) / top_weight < 0.15:
+                                is_ambiguous = True
 
-                # Physical Camera processing
-                ret, frame = cap.read()
-                if not ret:
-                    # Loop video if finished
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    continue
-                    
-                frame_count += 1
-                if frame_count % frame_skip != 0:
-                    continue
-                    
-                plate_text, ocr_conf, crop = ocr_engine.read_plate(frame)
-                if plate_text and crop is not None and crop.size > 0:
-                    # Validate confidence threshold (using 0.45 threshold to capture distant/low contrast reads)
-                    if ocr_conf >= 0.45:
-                        send_detection_to_backend(
-                            plate_number=plate_text,
-                            camera_id=cam_id,
-                            direction=cam_info["direction"],
-                            ocr_confidence=ocr_conf,
-                            ai_confidence=1.0,
-                            frame=frame,
-                            crop=crop
+                        final_review = top_info["review"] or is_ambiguous or (top_info["sum_conf"] / freq < 0.85)
+                        
+                        tracker.sent_plates[matched_id].add(plate)
+                        logger.info("Immediate stable plate trigger", plate=plate, votes=freq, review=final_review)
+                        send_plate_to_backend(
+                            plate=plate,
+                            confidence=top_info["sum_conf"] / freq,
+                            crop_img=top_info["crop"],
+                            review_needed=final_review,
+                            camera_id=camera_id
                         )
-            time.sleep(0.01) # Avoid 100% CPU lock
-    except KeyboardInterrupt:
-        setup_logger.info("Worker stopped by operator request")
-    finally:
-        for cap in caps.values():
-            if isinstance(cap, cv2.VideoCapture):
-                cap.release()
+
+        # 2. Process final exit reports for any mismatched tracker
+        for object_id, report in deregistered_reports:
+            if not report:
+                continue
+
+            total_votes = sum(item["count"] for item in report.values())
+            if total_votes < 4:
+                continue
+
+            candidates_weighted = []
+            for p_str, info in report.items():
+                freq = info["count"]
+                if freq > 0:
+                    avg_conf = info["sum_conf"] / freq
+                    weight = avg_conf * np.log(freq + 1)
+                    candidates_weighted.append((p_str, weight, info))
+
+            candidates_weighted.sort(key=lambda x: x[1], reverse=True)
+            if not candidates_weighted:
+                continue
+
+            top_plate, top_weight, top_info = candidates_weighted[0]
+            top_freq = top_info["count"]
+
+            if top_freq < (total_votes // 2) + 1:
+                continue
+
+            if object_id in tracker.sent_plates and top_plate in tracker.sent_plates[object_id]:
+                continue
+
+            is_ambiguous = False
+            if len(candidates_weighted) > 1:
+                runner_plate, runner_weight, _ = candidates_weighted[1]
+                if (top_weight - runner_weight) / top_weight < 0.15:
+                    is_ambiguous = True
+
+            final_review = top_info["review"] or is_ambiguous or (top_info["sum_conf"] / top_freq < 0.85)
+
+            send_plate_to_backend(
+                plate=top_plate,
+                confidence=top_info["sum_conf"] / top_freq,
+                crop_img=top_info["crop"],
+                review_needed=final_review,
+                camera_id=camera_id
+            )
+
 
 if __name__ == "__main__":
-    run_worker()
+    main()

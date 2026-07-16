@@ -26,9 +26,10 @@ class LPRService:
         ocr_confidence: float,
         ai_confidence: float,
         snapshot_path: str,
-        plate_crop_path: str
+        plate_crop_path: str,
+        review_needed: bool = False
     ) -> AccessLog:
-        logger.info("processing_plate_detection", plate=plate_number, camera_id=str(camera_id))
+        logger.info("processing_plate_detection", plate=plate_number, camera_id=str(camera_id), review_needed=review_needed)
 
         # 1. Look up vehicle in database
         vehicle = await self.vehicle_repo.get_by_plate(plate_number)
@@ -70,7 +71,8 @@ class LPRService:
             snapshot_path=snapshot_path,
             plate_crop_path=plate_crop_path,
             is_authorized=is_authorized,
-            gate_opened=gate_opened
+            gate_opened=gate_opened,
+            review_needed=review_needed
         )
         
         access_log = await self.access_log_repo.create(access_log)

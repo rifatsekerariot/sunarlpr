@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
+import os
 from app.core.database import get_db_session
 from app.repositories.repositories import CameraRepository, VehicleRepository, AccessLogRepository
 from app.services.lpr_service import LPRService
@@ -9,6 +10,9 @@ from app.api.schemas import DetectionRequest, AccessLogResponse
 from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/access-logs", tags=["Access Logs"])
+
+# Shared API key from environment configuration
+LPR_WORKER_API_KEY = os.getenv("LPR_WORKER_API_KEY", "ariot-lpr-worker-shared-secure-token-2026")
 
 @router.get("", response_model=List[AccessLogResponse])
 async def list_logs(
@@ -38,9 +42,16 @@ async def list_logs(
 @router.post("/detect", response_model=AccessLogResponse, status_code=status.HTTP_201_CREATED)
 async def process_detection(
     detection: DetectionRequest,
+    x_api_key: str | None = Header(None, alias="X-API-KEY"),
     db: AsyncSession = Depends(get_db_session)
 ):
-    # This endpoint is called by the camera-worker, it runs without user JWT token but from local container network
+    # Verify shared key to prevent unauthorized logs posting
+    if not x_api_key or x_api_key != LPR_WORKER_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-API-KEY header."
+        )
+
     camera_repo = CameraRepository(db)
     vehicle_repo = VehicleRepository(db)
     access_log_repo = AccessLogRepository(db)
@@ -54,7 +65,8 @@ async def process_detection(
         ocr_confidence=detection.ocr_confidence,
         ai_confidence=detection.ai_confidence,
         snapshot_path=detection.snapshot_path,
-        plate_crop_path=detection.plate_crop_path
+        plate_crop_path=detection.plate_crop_path,
+        review_needed=detection.review_needed
     )
     
     await db.commit()
