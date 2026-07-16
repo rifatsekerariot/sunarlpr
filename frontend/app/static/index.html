@@ -186,13 +186,19 @@
         <!-- Tab 2: Vehicle Lists -->
         <div x-show="currentTab === 'vehicles'" class="flex flex-col gap-6" x-cloak>
             <div class="flex justify-between items-center">
-                <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Araç Yönetim Listesi</h2>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xs font-semibold tracking-wider uppercase text-zinc-400">Araç Yönetim Listesi</h2>
+                    <button onclick="bulkDeleteSelectedVehicles()" class="bg-red-50 text-red-700 border border-red-200 font-bold px-3 py-1.5 rounded-lg text-[10px] tracking-wider hover:bg-red-100 transition uppercase">🗑️ Seçilenleri Toplu Sil</button>
+                </div>
                 <button @click="openEditWizard('', '', 'AUTHORIZED')" class="bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg text-xs tracking-wider hover:bg-indigo-700 transition">➕ YENİ ARAÇ EKLE</button>
             </div>
             <div class="overflow-x-auto border border-zinc-200 rounded-xl bg-white shadow-sm">
                 <table class="min-w-full divide-y divide-zinc-200">
                     <thead class="bg-zinc-50">
                         <tr>
+                            <th class="w-12 px-6 py-3 text-center">
+                                <input type="checkbox" id="vehicle-select-all" onclick="toggleSelectAllVehicles(this)" class="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500">
+                            </th>
                             <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">PLAKA</th>
                             <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">LİSTE DURUMU</th>
                             <th class="px-6 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">ARAÇ SAHİBİ</th>
@@ -203,7 +209,7 @@
                     </thead>
                     <tbody id="vehicle-table-body" hx-get="/api/html/vehicles" hx-trigger="load, every 4s" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
                         <tr>
-                            <td colspan="6" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
+                            <td colspan="7" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -485,6 +491,46 @@
                 htmx.trigger('#camera-table-body', 'load');
             } else {
                 alert('Silme işlemi başarısız.');
+            }
+        }
+
+        function toggleSelectAllVehicles(source) {
+            const checkboxes = document.querySelectorAll('.vehicle-select-chk');
+            checkboxes.forEach(chk => chk.checked = source.checked);
+        }
+
+        async function bulkDeleteSelectedVehicles() {
+            const selected = Array.from(document.querySelectorAll('.vehicle-select-chk:checked')).map(chk => chk.value);
+            if (selected.length === 0) {
+                alert('Lütfen silinecek araçları seçin.');
+                return;
+            }
+
+            if (!confirm(`Seçilen ${selected.length} aracı toplu olarak silmek istediğinizden emin misiniz?`)) return;
+
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('Oturum sonlandı, lütfen tekrar giriş yapın.');
+                window.location.href = '/';
+                return;
+            }
+
+            const res = await fetch('/api/vehicles/bulk-delete', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ ids: selected })
+            });
+
+            if (res.ok) {
+                alert('Seçilen araçlar başarıyla silindi.');
+                htmx.trigger('#vehicle-table-body', 'load');
+                const mainChk = document.getElementById('vehicle-select-all');
+                if (mainChk) mainChk.checked = false;
+            } else {
+                alert('Toplu silme işlemi sırasında bir hata oluştu.');
             }
         }
     </script>

@@ -92,6 +92,9 @@ async def get_vehicles_html(db: AsyncSession = Depends(get_db_session), query: O
         status_text = "YETKİLİ" if v.status == "AUTHORIZED" else ("YETKİSİZ" if v.status == "UNAUTHORIZED" else "BEKLEYEN")
         rows += f"""
         <tr class="border-b border-zinc-200 hover:bg-zinc-50 transition-colors">
+            <td class="px-6 py-4 text-center">
+                <input type="checkbox" class="vehicle-select-chk rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500" value="{v.id}">
+            </td>
             <td class="px-6 py-4 text-sm font-semibold text-zinc-950 tracking-wider">{v.plate_number}</td>
             <td class="px-6 py-4 text-center">
                 <span class="px-2.5 py-0.5 text-xs rounded-full border {status_bg} font-medium">{status_text}</span>

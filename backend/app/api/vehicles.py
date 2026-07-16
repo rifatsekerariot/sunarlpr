@@ -84,3 +84,20 @@ async def delete_vehicle(
     if not success:
         raise HTTPException(status_code=404, detail="Vehicle not found")
     await db.commit()
+
+
+from app.api.schemas import VehicleBulkDelete
+@router.post("/bulk-delete", status_code=status.HTTP_204_NO_CONTENT)
+async def bulk_delete_vehicles(
+    payload: VehicleBulkDelete,
+    db: AsyncSession = Depends(get_db_session),
+    current_user = Depends(get_current_user)
+):
+    if current_user.role not in ["ADMIN", "MANAGER"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete vehicles")
+    
+    from sqlalchemy import delete as sql_delete
+    query = sql_delete(Vehicle).where(Vehicle.id.in_(payload.ids))
+    await db.execute(query)
+    await db.commit()
+

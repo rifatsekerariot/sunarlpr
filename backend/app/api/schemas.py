@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
+from typing import List
 
 # Camera Schemas
 class CameraBase(BaseModel):
@@ -68,6 +69,11 @@ class VehicleResponse(VehicleBase):
 
     class Config:
         from_attributes = True
+
+
+class VehicleBulkDelete(BaseModel):
+    ids: List[UUID]
+
 
 
 # Detection/AccessLog Schemas
