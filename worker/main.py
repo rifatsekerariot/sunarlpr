@@ -148,25 +148,19 @@ def run_worker():
                 if frame_count % frame_skip != 0:
                     continue
                     
-                detections = detector.detect(frame)
-                for box, ai_conf in detections:
-                    x1, y1, x2, y2 = box
-                    crop = frame[y1:y2, x1:x2]
-                    
-                    if crop.size > 0:
-                        plate_text, ocr_conf = ocr_engine.read_plate(crop)
-                        
-                        # Validate confidence and format
-                        if plate_text and ocr_conf >= worker_config.OCR_CONFIDENCE_THRESHOLD:
-                            send_detection_to_backend(
-                                plate_number=plate_text,
-                                camera_id=cam_id,
-                                direction=cam_info["direction"],
-                                ocr_confidence=ocr_conf,
-                                ai_confidence=ai_conf,
-                                frame=frame,
-                                crop=crop
-                            )
+                plate_text, ocr_conf, crop = ocr_engine.read_plate(frame)
+                if plate_text and crop is not None and crop.size > 0:
+                    # Validate confidence threshold (using 0.45 threshold to capture distant/low contrast reads)
+                    if ocr_conf >= 0.45:
+                        send_detection_to_backend(
+                            plate_number=plate_text,
+                            camera_id=cam_id,
+                            direction=cam_info["direction"],
+                            ocr_confidence=ocr_conf,
+                            ai_confidence=1.0,
+                            frame=frame,
+                            crop=crop
+                        )
             time.sleep(0.01) # Avoid 100% CPU lock
     except KeyboardInterrupt:
         setup_logger.info("Worker stopped by operator request")
