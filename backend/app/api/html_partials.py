@@ -105,6 +105,7 @@ async def get_vehicles_html(db: AsyncSession = Depends(get_db_session), query: O
             <td class="px-6 py-4 text-center flex justify-center gap-2">
                 <button class="px-2 py-1 text-xs border border-zinc-200 rounded bg-white text-zinc-700 hover:bg-zinc-50 transition" onclick="openDetails('{v.plate_number}')">Geçmiş</button>
                 <button class="px-2 py-1 text-xs border border-zinc-200 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition" onclick="openEditWizard('{v.id}', '{v.plate_number}', '{v.status}')">Düzenle</button>
+                <button class="px-2 py-1 text-xs border border-red-200 rounded bg-red-50 text-red-700 hover:bg-red-100 transition" onclick="deleteVehicle('{v.id}')">Sil</button>
             </td>
         </tr>
         """

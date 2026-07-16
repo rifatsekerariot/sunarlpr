@@ -43,6 +43,7 @@
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
+        [x-cloak] { display: none !important; }
     </style>
 </head>
 <body class="bg-zinc-50 text-zinc-900 flex min-h-screen" x-data="{ 
@@ -132,7 +133,7 @@
         <!-- Tab 1: Dashboard -->
         <div x-show="currentTab === 'dashboard'" class="flex flex-col gap-6">
             <!-- HTMX KPI updates -->
-            <div hx-get="/api/html/kpis" hx-trigger="load, every 3s" hx-swap="outerHTML">
+            <div id="dashboard-kpis-container" hx-get="/api/html/kpis" hx-trigger="load, every 3s" hx-swap="outerHTML">
                 <div class="text-xs text-zinc-400">KPI kartları yükleniyor...</div>
             </div>
 
@@ -147,7 +148,7 @@
                         </div>
                         <span class="text-[10px] text-zinc-400">Her 3sn güncellenir</span>
                     </div>
-                    <div class="min-h-[160px]"
+                    <div id="live-monitor-container" class="min-h-[160px]"
                          hx-get="/api/html/live-monitor"
                          hx-trigger="load, every 3s"
                          hx-swap="innerHTML">
@@ -174,7 +175,7 @@
                             <th class="px-6 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">İŞLEMLER</th>
                         </tr>
                     </thead>
-                    <tbody hx-get="/api/html/logs" hx-trigger="load, every 3s" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
+                    <tbody id="live-logs-table-body" hx-get="/api/html/logs" hx-trigger="load, every 3s" hx-swap="innerHTML" class="divide-y divide-zinc-200/50">
                         <tr>
                             <td colspan="7" class="px-6 py-4 text-center text-xs text-zinc-400">Yükleniyor...</td>
                         </tr>
@@ -382,10 +383,16 @@
             window.location.href = '/';
         }
 
+        function triggerAllRefreshes() {
+            htmx.trigger('#vehicle-table-body', 'load');
+            htmx.trigger('#dashboard-kpis-container', 'load');
+            htmx.trigger('#live-monitor-container', 'load');
+            htmx.trigger('#live-logs-table-body', 'load');
+        }
+
         async function submitVehicleForm() {
             const state = window.getVehicleState();
             
-            // Read Token from LocalStorage
             const token = localStorage.getItem('access_token');
             if (!token) {
                 alert('Oturum sonlandı, lütfen tekrar giriş yapın.');
@@ -404,14 +411,12 @@
 
             let res;
             if (state.id) {
-                // Update
                 res = await fetch(`/api/vehicles/${state.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify(payload)
                 });
             } else {
-                // Create new
                 res = await fetch('/api/vehicles', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -422,9 +427,32 @@
             if (res.ok) {
                 alert('Araç başarıyla kaydedildi.');
                 state.close();
-                htmx.trigger('#vehicle-table-body', 'load');
+                triggerAllRefreshes();
             } else {
                 alert('İşlem başarısız oldu.');
+            }
+        }
+
+        async function deleteVehicle(id) {
+            if (!confirm('Bu aracı silmek istediğinizden emin misiniz?')) return;
+
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('Oturum sonlandı, lütfen tekrar giriş yapın.');
+                window.location.href = '/';
+                return;
+            }
+
+            const res = await fetch(`/api/vehicles/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                alert('Araç başarıyla silindi.');
+                triggerAllRefreshes();
+            } else {
+                alert('Silme işlemi başarısız.');
             }
         }
 
@@ -526,7 +554,7 @@
 
             if (res.ok) {
                 alert('Seçilen araçlar başarıyla silindi.');
-                htmx.trigger('#vehicle-table-body', 'load');
+                triggerAllRefreshes();
                 const mainChk = document.getElementById('vehicle-select-all');
                 if (mainChk) mainChk.checked = false;
             } else {
