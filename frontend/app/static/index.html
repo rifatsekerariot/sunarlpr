@@ -46,7 +46,7 @@
     </style>
 </head>
 <body class="bg-zinc-50 text-zinc-900 flex min-h-screen" x-data="{ 
-    currentTab: 'dashboard', 
+    currentTab: localStorage.getItem('active_tab') || 'dashboard', 
     modalOpen: false, 
     modalPlate: '', 
     historyData: [],
@@ -64,7 +64,21 @@
     camDir: 'IN',
     camUrl: ''
 }" x-init="
-    window.openDetails = (plate) => { modalPlate = plate; modalOpen = true; };
+    $watch('currentTab', val => localStorage.setItem('active_tab', val));
+    window.openDetails = async (plate) => { 
+        modalPlate = plate; 
+        modalOpen = true; 
+        historyData = [];
+        const token = localStorage.getItem('access_token');
+        try {
+            const res = await fetch(`/api/access-logs/history/${plate}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                historyData = await res.json();
+            }
+        } catch(e) {}
+    };
     window.openEditWizard = (id, plate, status) => { editId = id; editPlate = plate; editStatus = status; editOwner = ''; editCompany = ''; editOpen = true; };
     window.openCameraEditWizard = (id, name, location, direction, url) => { camId = id; camName = name; camLoc = location; camDir = direction; camUrl = url; cameraOpen = true; };
     window.getVehicleState = () => { return { id: editId, plate: editPlate, status: editStatus, owner: editOwner, company: editCompany, type: editType, close: () => { editOpen = false; } }; };
@@ -252,12 +266,41 @@
 
     <!-- Modal Popup for vehicle history -->
     <div x-show="modalOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
-        <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
-            <h3 class="text-lg font-bold text-zinc-950">Araç Geçmişi: <span x-text="modalPlate"></span></h3>
-            <div class="p-3 bg-zinc-50 rounded-lg text-xs text-zinc-400 text-center">
-                Geçiş geçmişi verileri canlı log tablosundan alınmaktadır.
+        <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[550px] max-w-full flex flex-col gap-4 shadow-xl">
+            <h3 class="text-sm font-bold tracking-wider uppercase text-zinc-500">Geçiş Geçmişi: <span class="text-zinc-950 font-bold" x-text="modalPlate"></span></h3>
+            
+            <div class="max-h-[300px] overflow-y-auto border border-zinc-100 rounded-lg">
+                <table class="min-w-full divide-y divide-zinc-200">
+                    <thead class="bg-zinc-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-[10px] font-bold text-zinc-400 uppercase">Saat</th>
+                            <th class="px-4 py-2 text-left text-[10px] font-bold text-zinc-400 uppercase">Yön</th>
+                            <th class="px-4 py-2 text-left text-[10px] font-bold text-zinc-400 uppercase">Güven</th>
+                            <th class="px-4 py-2 text-left text-[10px] font-bold text-zinc-400 uppercase">Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100 bg-white">
+                        <template x-for="log in historyData" :key="log.id">
+                            <tr class="hover:bg-zinc-50 transition-colors">
+                                <td class="px-4 py-2 text-xs text-zinc-600" x-text="new Date(log.timestamp).toLocaleTimeString('tr-TR')"></td>
+                                <td class="px-4 py-2 text-xs font-semibold" :class="log.direction === 'IN' ? 'text-emerald-600' : 'text-blue-600'" x-text="log.direction === 'IN' ? 'GİRİŞ' : 'ÇIKIŞ'"></td>
+                                <td class="px-4 py-2 text-xs text-zinc-500" x-text="'%' + Math.round(log.ocr_confidence * 100)"></td>
+                                <td class="px-4 py-2 text-xs">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-medium"
+                                          :class="log.is_authorized ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'"
+                                          x-text="log.is_authorized ? 'YETKİLİ' : 'BİLİNMEYEN'"></span>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="historyData.length === 0">
+                            <tr>
+                                <td colspan="4" class="px-4 py-6 text-center text-xs text-zinc-400">Bu araca ait geçiş kaydı bulunamadı.</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
-            <button @click="modalOpen = false" class="w-full bg-zinc-900 text-white py-2 rounded-lg text-xs hover:bg-zinc-800 transition">Kapat</button>
+            <button @click="modalOpen = false" class="w-full bg-zinc-950 text-white py-2.5 rounded-lg text-xs font-bold hover:bg-zinc-900 transition uppercase tracking-wider">Kapat</button>
         </div>
     </div>
 
