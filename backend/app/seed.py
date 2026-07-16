@@ -1,16 +1,16 @@
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.database import async_session_factory
 from app.models.models import User, Camera
 from app.core.security import get_password_hash
 
+
 async def seed_data():
     async with async_session_factory() as session:
-        # Check if Admin exists
-        from sqlalchemy import select
+        # Seed admin user
         result = await session.execute(select(User).filter(User.username == "admin"))
         admin = result.scalars().first()
-        
+
         if not admin:
             admin = User(
                 username="admin",
@@ -20,13 +20,14 @@ async def seed_data():
             )
             session.add(admin)
             print("Admin user seeded: admin / admin123")
-            
-        # Check if cameras exist
+        else:
+            print("Admin user already exists.")
+
+        # Seed default camera
         result = await session.execute(select(Camera))
         cameras = result.scalars().all()
-        
+
         if not cameras:
-            # Seed 1 default camera matching the camera-worker UUID config
             cam = Camera(
                 id="8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f",
                 name="Ana Kapı Giriş",
@@ -36,9 +37,12 @@ async def seed_data():
                 is_active=True
             )
             session.add(cam)
-            print("Default camera seeded: 8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f")
-            
+            print("Default camera seeded.")
+        else:
+            print("Cameras already exist.")
+
         await session.commit()
+
 
 if __name__ == "__main__":
     asyncio.run(seed_data())

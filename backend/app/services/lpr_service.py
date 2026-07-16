@@ -1,6 +1,6 @@
 import structlog
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from app.repositories.repositories import CameraRepository, VehicleRepository, AccessLogRepository
 from app.models.models import Camera, Vehicle, AccessLog
 from app.services.redis_service import redis_service
