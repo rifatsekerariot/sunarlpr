@@ -17,7 +17,7 @@ class PlateOCR:
         try:
             # Initialize PaddleOCR with Turkish / English characters
             # lang='tr' supports Turkish letters (like Ç, Ğ, I, İ, Ö, Ş, Ü) which are common in older plates or custom plates
-            self.ocr = PaddleOCR(use_angle_cls=False, lang='tr', show_log=False)
+            self.ocr = PaddleOCR(lang='tr')
             logger.info("PaddleOCR engine loaded successfully")
         except Exception as e:
             logger.warning("PaddleOCR loading failed, using fallback regex simulation for dev testing", error=str(e))
