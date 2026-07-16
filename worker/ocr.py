@@ -42,10 +42,8 @@ class PlateOCR:
         Returns: Tuple (plate_text, confidence)
         """
         if self.ocr is None:
-            # Fallback mock generator
-            mock_plates = ["34ABC123", "06ANK06", "35XYZ89", "34VIP99", "34POL01"]
-            plate = np.random.choice(mock_plates)
-            return plate, 0.95
+            # OCR engine not loaded — return empty, do not generate mock plates
+            return "", 0.0
 
         try:
             result = self.ocr.ocr(crop, cls=False)

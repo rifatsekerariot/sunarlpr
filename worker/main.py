@@ -73,19 +73,17 @@ def run_worker():
     caps = {}
     for cam_id, info in cameras.items():
         rtsp_url = info["rtsp_url"]
-        # Use video file or 0 for webcams if needed, otherwise RTSP
-        if rtsp_url.endswith(".mp4") and not os.path.exists(rtsp_url):
-            # Create a placeholder video simulation if stream file is missing
-            caps[cam_id] = "SIMULATOR"
-            setup_logger.info("Using simulation stream for camera", camera=info["name"])
+        if rtsp_url == "simulation_rtsp_url" or not rtsp_url:
+            setup_logger.warning("No valid RTSP URL configured — camera skipped", camera=info["name"])
+            caps[cam_id] = "NO_STREAM"
         else:
             cap = cv2.VideoCapture(rtsp_url)
             if cap.isOpened():
                 caps[cam_id] = cap
                 setup_logger.info("Stream opened successfully", camera=info["name"], url=rtsp_url)
             else:
-                caps[cam_id] = "SIMULATOR"
-                setup_logger.warning("Failed to open stream, falling back to simulator", camera=info["name"])
+                caps[cam_id] = "NO_STREAM"
+                setup_logger.warning("Failed to open stream — camera skipped", camera=info["name"])
 
     frame_count = 0
     frame_skip = 5 # Run inference every 5 frames to optimize CPU utilization
@@ -95,28 +93,9 @@ def run_worker():
             for cam_id, cap in caps.items():
                 cam_info = cameras[cam_id]
                 
-                if cap == "SIMULATOR":
-                    # Generate artificial detection events
-                    time.sleep(2.0)
-                    if np.random.rand() < 0.3:
-                        # 30% chance to generate a plate detection
-                        dummy_frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
-                        cv2.putText(dummy_frame, "LPR SIMULATOR", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
-                        
-                        dummy_crop = np.zeros((150, 450, 3), dtype=np.uint8)
-                        cv2.rectangle(dummy_crop, (10, 10), (440, 140), (255, 255, 255), -1)
-                        
-                        plate_text, ocr_conf = ocr_engine.read_plate(dummy_crop)
-                        if plate_text:
-                            send_detection_to_backend(
-                                plate_number=plate_text,
-                                camera_id=cam_id,
-                                direction=cam_info["direction"],
-                                ocr_confidence=ocr_conf,
-                                ai_confidence=0.94,
-                                frame=dummy_frame,
-                                crop=dummy_crop
-                            )
+                if cap == "NO_STREAM":
+                    # Stream could not be opened — skip, do not generate mock data
+                    time.sleep(5.0)
                     continue
 
                 # Physical Camera processing
@@ -158,6 +137,4 @@ def run_worker():
                 cap.release()
 
 if __name__ == "__main__":
-    # Import numpy here for local execution scope inside simulation
-    import numpy as np
     run_worker()

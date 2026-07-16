@@ -219,9 +219,8 @@
     <div x-show="modalOpen" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center p-4 z-50" x-cloak>
         <div class="bg-white border border-zinc-200 p-6 rounded-xl w-[500px] max-w-full flex flex-col gap-4 shadow-xl">
             <h3 class="text-lg font-bold text-zinc-950">Araç Geçmişi: <span x-text="modalPlate"></span></h3>
-            <div class="flex justify-between p-3 bg-zinc-50 rounded-lg text-xs text-zinc-500">
-                <span>İlk Görülme: 16.07.2026</span>
-                <span>Toplam Geçiş: 83</span>
+            <div class="p-3 bg-zinc-50 rounded-lg text-xs text-zinc-400 text-center">
+                Geçiş geçmişi verileri canlı log tablosundan alınmaktadır.
             </div>
             <button @click="modalOpen = false" class="w-full bg-zinc-900 text-white py-2 rounded-lg text-xs hover:bg-zinc-800 transition">Kapat</button>
         </div>
