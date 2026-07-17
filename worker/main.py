@@ -245,6 +245,9 @@ def main():
             if review_needed:
                 cache[plate]["review"] = True
 
+            logger.info("Debug tracking", freq=cache[plate]["count"], plate=plate, matched_id=matched_id, total_frames=total_valid_frames)
+
+
             # FIFO Sliding Window logic: if total valid frames exceeds 12, decay older candidate counts proportionally
             if total_valid_frames > tracker.max_window_size:
                 for p_key in list(cache.keys()):
