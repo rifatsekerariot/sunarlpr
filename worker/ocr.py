@@ -201,12 +201,6 @@ class PlateOCR:
                                 ]
                                 break
 
-            if not best_plate and candidates:
-                candidates.sort(key=lambda c: c[2], reverse=True)
-                best_plate = candidates[0][1]
-                best_conf = candidates[0][2]
-                best_box = candidates[0][0]
-                review_needed = True
 
             if best_plate and best_box:
                 xs = [pt[0] for pt in best_box]
