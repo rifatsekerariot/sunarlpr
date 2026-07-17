@@ -46,7 +46,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
       - shared-media:/app/media
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -66,7 +65,6 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./frontend:/app
       - shared-media:/app/media
     depends_on:
       backend:
@@ -82,8 +80,6 @@ services:
       - LPR_WORKER_API_KEY=ariot-lpr-worker-shared-secure-token-2026
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./worker:/app
-      - ./worker/models:/app/models
       - shared-media:/app/media
 
   nginx:
