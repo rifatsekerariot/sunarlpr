@@ -137,12 +137,15 @@ def authenticate_worker():
 def get_active_cameras():
     try:
         url = f"{BACKEND_API_URL}/api/cameras"
-        res = requests.get(url, timeout=3)
+        headers = {
+            "X-API-KEY": LPR_WORKER_API_KEY
+        }
+        res = requests.get(url, headers=headers, timeout=3)
         if res.status_code == 200:
             return res.json()
     except Exception as e:
         logger.error("Failed to load active cameras", error=str(e))
-    return [{"id": "925c682d-5835-41c3-a4d6-d7bbc4ee914a", "name": "TEST", "url": "rtsp://admin:Adanarft@192.168.1.64:554/Streaming/Channels/101"}]
+    return [{"id": "8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f", "name": "TEST", "url": "rtsp://admin:Adanarft@192.168.1.64:554/Streaming/Channels/101"}]
 
 
 def send_plate_to_backend(plate, confidence, crop_img, review_needed, camera_id):
