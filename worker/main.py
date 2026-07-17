@@ -6,6 +6,7 @@ import numpy as np
 import redis
 import json
 import structlog
+import threading
 from ocr import PlateOCR
 
 # Configure structured logger
@@ -206,6 +207,55 @@ def send_plate_to_backend(plate, confidence, crop_img, review_needed, camera_id)
     return False
 
 
+class FreshFrameReader:
+    def __init__(self, rtsp_url):
+        self.rtsp_url = rtsp_url
+        self.cap = cv2.VideoCapture(self.rtsp_url)
+        self.lock = threading.Lock()
+        self.running = True
+        self.frame = None
+        self.ret = False
+        self.thread = threading.Thread(target=self._update, daemon=True)
+        self.thread.start()
+
+    def _update(self):
+        while self.running:
+            with self.lock:
+                if not self.cap.isOpened():
+                    self.cap.release()
+                    self.cap = cv2.VideoCapture(self.rtsp_url)
+                    time.sleep(2)
+                    continue
+            ret, frame = self.cap.read()
+            if not ret:
+                logger.warning("RTSP stream frame capture failure. Reconnecting...")
+                time.sleep(2)
+                with self.lock:
+                    self.cap.release()
+                    self.cap = cv2.VideoCapture(self.rtsp_url)
+                continue
+            with self.lock:
+                self.frame = frame
+                self.ret = ret
+            time.sleep(0.01)
+
+    def read(self):
+        with self.lock:
+            if self.frame is None:
+                return False, None
+            return self.ret, self.frame.copy()
+
+    def isOpened(self):
+        with self.lock:
+            return self.cap.isOpened()
+
+    def release(self):
+        self.running = False
+        self.thread.join(timeout=1)
+        with self.lock:
+            self.cap.release()
+
+
 def main():
     if not authenticate_worker():
         logger.error("Worker authentication failed. Exiting.")
@@ -220,24 +270,15 @@ def main():
     camera_id = cam["id"]
 
     logger.info("Starting LPR camera worker loop")
-    cap = cv2.VideoCapture(camera_url)
-    if not cap.isOpened():
+    reader = FreshFrameReader(camera_url)
+    if not reader.isOpened():
         logger.error("Failed to open camera RTSP stream", url=camera_url)
         return
 
-    frame_count = 0
-    frame_skip = 4
-
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            logger.warning("RTSP stream frame capture failure. Reconnecting...")
-            time.sleep(2)
-            cap = cv2.VideoCapture(camera_url)
-            continue
-
-        frame_count += 1
-        if frame_count % frame_skip != 0:
+        ret, frame = reader.read()
+        if not ret or frame is None:
+            time.sleep(0.1)
             continue
 
         try:
