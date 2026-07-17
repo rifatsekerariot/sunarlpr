@@ -214,7 +214,11 @@ def main():
         if frame_count % frame_skip != 0:
             continue
 
-        plate, confidence, crop_img, review_needed = ocr_engine.read_plate(frame)
+        try:
+            plate, confidence, crop_img, review_needed = ocr_engine.read_plate(frame)
+        except Exception as ocr_err:
+            logger.error("OCR engine read_plate error on frame", error=str(ocr_err))
+            plate, confidence, crop_img, review_needed = "", 0.0, None, True
 
         detected_bboxes = []
         # Rule 1: Only count votes where individual OCR confidence >= 0.85
