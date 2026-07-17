@@ -36,7 +36,7 @@ if (-not (Test-Path ".env")) {
     Write-Host "[+] .env yapılandırma dosyası oluşturuluyor..." -ForegroundColor Cyan
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/.env.example" -OutFile ".env"
     
-    $dbPass = Read-Host "Veritabanı şifresini belirleyin (Default: lpr_password)"
+    $dbPass = Read-Host 'Veritabanı şifresini belirleyin (Varsayılan: lpr_password)'
     if ($dbPass) {
         (Get-Content .env) -replace "lpr_password", $dbPass | Set-Content .env
     }
