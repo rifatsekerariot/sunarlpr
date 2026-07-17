@@ -159,8 +159,20 @@ def get_active_cameras():
     return [{"id": "8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f", "name": "TEST", "url": "rtsp://admin:Adanarft@192.168.1.64:554/Streaming/Channels/101"}]
 
 
+# Duplicate detection suppression
+LAST_SENT_TIMES = {}
+
+
 def send_plate_to_backend(plate, confidence, crop_img, review_needed, camera_id):
     try:
+        # Central duplicate suppression (30 seconds cooldown)
+        last_sent = LAST_SENT_TIMES.get(plate, 0.0)
+        if time.time() - last_sent < 30.0:
+            logger.info("Duplicate detection suppressed by cooldown", plate=plate, elapsed=time.time() - last_sent)
+            return
+
+        LAST_SENT_TIMES[plate] = time.time()
+
         if crop_img is not None and crop_img.size > 0:
             _, buffer = cv2.imencode('.jpg', crop_img)
             import base64
