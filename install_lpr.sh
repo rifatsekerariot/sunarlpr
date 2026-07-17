@@ -37,9 +37,11 @@ sudo mkdir -p "$INSTALL_DIR"
 sudo chown -R $USER:$USER "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# 4. Download docker-compose.yml from Repository
-echo "[+] Docker Compose dosyası indiriliyor..."
+# 4. Download docker-compose.yml and nginx.conf
+echo "[+] Yapılandırma dosyaları indiriliyor..."
 curl -sSL https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/docker-compose.yml -o docker-compose.yml
+mkdir -p nginx
+curl -sSL https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/nginx/nginx.conf -o nginx/nginx.conf
 
 # 5. Create/Configure .env file
 if [ ! -f .env ]; then

@@ -27,9 +27,13 @@ if (-not (Test-Path $installDir)) {
 }
 Set-Location $installDir
 
-# 4. Download docker-compose.yml
-Write-Host "[+] Downloading Docker Compose file..." -ForegroundColor Cyan
+# 4. Download docker-compose.yml and nginx.conf
+Write-Host "[+] Downloading configuration files..." -ForegroundColor Cyan
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/docker-compose.yml" -OutFile "docker-compose.yml"
+if (-not (Test-Path "nginx")) {
+    New-Item -ItemType Directory -Path "nginx" | Out-Null
+}
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/nginx/nginx.conf" -OutFile "nginx/nginx.conf"
 
 # 5. Create/Configure .env file
 if (-not (Test-Path ".env")) {
