@@ -33,6 +33,25 @@ class LPRService:
     ) -> AccessLog:
         logger.info("processing_plate_detection", plate=plate_number, camera_id=str(camera_id), review_needed=review_needed)
 
+        # Ensure camera_id exists to satisfy foreign key constraint
+        camera_exists = await self.camera_repo.get_by_id(camera_id)
+        if not camera_exists:
+            all_cams = await self.camera_repo.get_all()
+            if all_cams:
+                camera_id = all_cams[0].id
+                logger.info("Camera ID not found in DB, falling back to first registered camera", fallback_camera_id=str(camera_id))
+            else:
+                fallback_cam = Camera(
+                    id=camera_id,
+                    name="Otomatik Tanımlı Kamera",
+                    location="Giriş Kapısı",
+                    direction="IN",
+                    rtsp_url="rtsp://default",
+                    is_active=True
+                )
+                await self.camera_repo.create(fallback_cam)
+                logger.info("No cameras found in DB, auto-created default camera with requested ID", camera_id=str(camera_id))
+
         # 1. Look up vehicle in database
         vehicle = await self.vehicle_repo.get_by_plate(plate_number)
         
