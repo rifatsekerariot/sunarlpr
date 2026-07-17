@@ -23,7 +23,7 @@ TO_LETTER = {"0": "O", "1": "I", "8": "B", "5": "S", "2": "Z", "6": "G"}
 class PlateOCR:
     def __init__(self):
         try:
-            self.ocr = PaddleOCR(lang='latin', ocr_version='PP-OCRv3', use_space_char=False)
+            self.ocr = PaddleOCR(lang='en', ocr_version='PP-OCRv4', use_space_char=False)
             logger.info("PaddleOCR engine loaded successfully")
         except Exception as e:
             logger.warning("PaddleOCR loading failed", error=str(e))
