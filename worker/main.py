@@ -165,9 +165,9 @@ LAST_SENT_TIMES = {}
 
 def send_plate_to_backend(plate, confidence, crop_img, review_needed, camera_id):
     try:
-        # Central duplicate suppression (30 seconds cooldown)
+        # Central duplicate suppression (5 seconds cooldown)
         last_sent = LAST_SENT_TIMES.get(plate, 0.0)
-        if time.time() - last_sent < 30.0:
+        if time.time() - last_sent < 5.0:
             logger.info("Duplicate detection suppressed by cooldown", plate=plate, elapsed=time.time() - last_sent)
             return
 
