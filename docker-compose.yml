@@ -76,10 +76,9 @@ services:
     build: ./worker
     container_name: lpr-worker
     restart: always
-    network_mode: host
     environment:
-      - BACKEND_API_URL=http://127.0.0.1:8000
-      - REDIS_URL=redis://127.0.0.1:6379/0
+      - BACKEND_API_URL=http://backend:8000
+      - REDIS_URL=redis://redis:6379/0
       - LPR_WORKER_API_KEY=ariot-lpr-worker-shared-secure-token-2026
       - PYTHONUNBUFFERED=1
     volumes:
