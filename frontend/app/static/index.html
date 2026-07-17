@@ -69,7 +69,8 @@
     ebaSoapUrl: '',
     ebaRestUrl: '',
     ebaUser: '',
-    ebaPassword: ''
+    ebaPassword: '',
+    cameraGuideOpen: false
 }" x-init="
     $watch('currentTab', val => {
         localStorage.setItem('active_tab', val);
@@ -282,6 +283,54 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- IP Camera & NVR Connection Guide Accordion -->
+            <div class="border border-zinc-200 rounded-xl bg-white shadow-sm overflow-hidden">
+                <button @click="cameraGuideOpen = !cameraGuideOpen" class="w-full flex items-center justify-between p-5 bg-zinc-50 border-b border-zinc-150 hover:bg-zinc-100 transition-colors text-left focus:outline-none">
+                    <h3 class="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-info-circle text-indigo-600"></i> IP Kamera & NVR Bağlantı Kılavuzu (RTSP)
+                    </h3>
+                    <i class="fas" :class="cameraGuideOpen ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                </button>
+                <div x-show="cameraGuideOpen" x-transition class="p-6 flex flex-col gap-6 text-xs text-zinc-600 bg-white">
+                    <div>
+                        <h4 class="font-bold text-zinc-900 mb-2 uppercase tracking-wide">1. İdeal Kamera & Akış Ayarları (LPR İçin)</h4>
+                        <ul class="list-disc pl-5 flex flex-col gap-1">
+                            <li><strong>Görüntü Sıkıştırma (Codec)</strong>: H.264 (H.265'e göre plaka tanıma performansı daha kararlıdır).</li>
+                            <li><strong>Çözünürlük</strong>: 1080p (1920x1080) veya 720p (1280x720) idealdir.</li>
+                            <li><strong>Kare Hızı (FPS)</strong>: 15 - 25 FPS aralığı önerilir.</li>
+                            <li><strong>Enstantane Hızı (Shutter Speed)</strong>: Gündüz ve gece plaka parlamasını önlemek için <strong>1/500 sn</strong> veya <strong>1/1000 sn</strong> ayarlanmalıdır.</li>
+                        </ul>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-zinc-100 pt-4">
+                        <div>
+                            <h4 class="font-bold text-zinc-900 mb-2 uppercase tracking-wide">2. Hikvision RTSP Adres Formatları</h4>
+                            <p class="mb-2"><strong>Şablon</strong>: <code class="bg-zinc-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[10px]">rtsp://[User]:[Pass]@[IP]:554/Streaming/Channels/[Kanal][Akis]</code></p>
+                            <ul class="list-disc pl-5 flex flex-col gap-1 text-[11px]">
+                                <li><strong>Ana Akış (Kanal 1)</strong>: <code class="font-mono text-[10px]">/Streaming/Channels/101</code></li>
+                                <li><strong>Alt Akış / 2. Kanal (Kanal 1)</strong>: <code class="font-mono text-[10px]">/Streaming/Channels/102</code></li>
+                                <li><strong>NVR Üzerinden (Kanal 5 - Ana Akış)</strong>: <code class="font-mono text-[10px]">/Streaming/Channels/501</code></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-zinc-900 mb-2 uppercase tracking-wide">3. Dahua RTSP Adres Formatları</h4>
+                            <p class="mb-2"><strong>Şablon</strong>: <code class="bg-zinc-100 px-1 py-0.5 rounded text-indigo-600 font-mono text-[10px]">rtsp://[User]:[Pass]@[IP]:554/cam/realmonitor?channel=[Kanal]&subtype=[Akis]</code></p>
+                            <ul class="list-disc pl-5 flex flex-col gap-1 text-[11px]">
+                                <li><strong>Ana Akış (Kanal 1)</strong>: <code class="font-mono text-[10px]">?channel=1&subtype=0</code></li>
+                                <li><strong>Alt Akış / 2. Kanal (Kanal 1)</strong>: <code class="font-mono text-[10px]">?channel=1&subtype=1</code></li>
+                                <li><strong>NVR Üzerinden (Kanal 3 - Ana Akış)</strong>: <code class="font-mono text-[10px]">?channel=3&subtype=0</code></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-zinc-100 pt-4">
+                        <h4 class="font-bold text-zinc-900 mb-2 uppercase tracking-wide">4. Bağlantı Sorunları Giderme</h4>
+                        <p class="mb-1"><strong>Şifre Karakter Sorunu</strong>: Kamera veya NVR şifrenizde <code class="font-mono bg-zinc-100 px-1 py-0.5 rounded">@</code>, <code class="font-mono bg-zinc-100 px-1 py-0.5 rounded">:</code>, <code class="font-mono bg-zinc-100 px-1 py-0.5 rounded">/</code> gibi özel karakterler bulunması RTSP adresi çözümlemesini bozabilir. Şifrede sadece harf ve sayı kullanılması önerilir.</p>
+                        <p><strong>Akış Doğrulama</strong>: RTSP adresini sisteme eklemeden önce <strong>VLC Media Player</strong> (Ortam -> Ağ Akışı Aç) üzerinden açarak görüntünün gelip gelmediğini doğrulayabilirsiniz.</p>
+                    </div>
+                </div>
             </div>
 
             <!-- eBA Integration Settings Card -->
