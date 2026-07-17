@@ -16,7 +16,21 @@ async def get_kpis_html(db: AsyncSession = Depends(get_db_session)):
     out_today = await db.scalar(select(func.count(AccessLog.id)).filter(AccessLog.timestamp >= today_start, AccessLog.direction == "OUT")) or 0
     auth_vehicles = await db.scalar(select(func.count(Vehicle.id)).filter(Vehicle.status == "AUTHORIZED", Vehicle.is_active == True)) or 0
     pending_vehicles = await db.scalar(select(func.count(Vehicle.id)).filter(Vehicle.status == "PENDING")) or 0
-    inside_count = max(0, in_today - out_today)
+    # Calculate inside_count: count of distinct vehicles whose latest log is IN
+    subq = (
+        select(
+            AccessLog.plate_number,
+            func.max(AccessLog.timestamp).label("max_ts")
+        )
+        .group_by(AccessLog.plate_number)
+        .subquery()
+    )
+    stmt = (
+        select(func.count(AccessLog.id))
+        .join(subq, (AccessLog.plate_number == subq.c.plate_number) & (AccessLog.timestamp == subq.c.max_ts))
+        .filter(AccessLog.direction == "IN")
+    )
+    inside_count = await db.scalar(stmt) or 0
 
     return f"""
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">

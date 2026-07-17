@@ -39,8 +39,21 @@ async def get_dashboard_stats(
         select(func.count(Camera.id)).filter(Camera.is_active == True)
     )
 
-    # Simplified calculation for vehicle count inside: IN count minus OUT count
-    inside_count = max(0, (in_today or 0) - (out_today or 0))
+    # Calculate inside_count: count of distinct vehicles whose latest log is IN
+    subq = (
+        select(
+            AccessLog.plate_number,
+            func.max(AccessLog.timestamp).label("max_ts")
+        )
+        .group_by(AccessLog.plate_number)
+        .subquery()
+    )
+    stmt = (
+        select(func.count(AccessLog.id))
+        .join(subq, (AccessLog.plate_number == subq.c.plate_number) & (AccessLog.timestamp == subq.c.max_ts))
+        .filter(AccessLog.direction == "IN")
+    )
+    inside_count = await db.scalar(stmt) or 0
 
     # Health metrics (Placeholder stats, can be integrated via health checks)
     return {

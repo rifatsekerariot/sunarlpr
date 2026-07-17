@@ -151,7 +151,7 @@
                 </button>
             </div>
 
-            <div id="dashboard-kpis-container" hx-get="/api/html/kpis" hx-trigger="load, reloadKPIs from:body" hx-swap="outerHTML">
+            <div id="dashboard-kpis-container" hx-get="/api/html/kpis" hx-trigger="load, reloadKPIs from:body" hx-swap="innerHTML">
                 <div class="text-xs text-zinc-400">KPI kartları yükleniyor...</div>
             </div>
 
