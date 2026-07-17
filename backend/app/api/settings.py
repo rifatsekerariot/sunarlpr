@@ -1,21 +1,21 @@
 import os
 import json
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.core.config import settings
 from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
 class EBASettingsSchema(BaseModel):
-    EBA_ENABLED: bool
-    EBA_API_TYPE: str
-    EBA_SOAP_URL: str
-    EBA_REST_URL: str
-    EBA_USER: str
-    EBA_PASSWORD: str
+    EBA_ENABLED: bool = Field(..., description="eBA entegrasyonunun aktiflik durumu")
+    EBA_API_TYPE: str = Field(..., description="Entegrasyon protokolü (REST veya SOAP)")
+    EBA_SOAP_URL: str = Field(..., description="Bimser eBA SOAP web servis adresi")
+    EBA_REST_URL: str = Field(..., description="Bimser eBA REST API adresi")
+    EBA_USER: str = Field(..., description="Servis kullanıcısı adı")
+    EBA_PASSWORD: str = Field(..., description="Servis kullanıcısı şifresi")
 
-@router.get("/eba", response_model=EBASettingsSchema)
+@router.get("/eba", response_model=EBASettingsSchema, summary="eBA Entegrasyon Ayarlarını Getir", description="Aktif olan Bimser eBA entegrasyon parametrelerini okur.")
 async def get_eba_settings(current_user = Depends(get_current_user)):
     return EBASettingsSchema(
         EBA_ENABLED=settings.EBA_ENABLED,
@@ -26,7 +26,7 @@ async def get_eba_settings(current_user = Depends(get_current_user)):
         EBA_PASSWORD=settings.EBA_PASSWORD
     )
 
-@router.put("/eba", status_code=status.HTTP_200_OK)
+@router.put("/eba", status_code=status.HTTP_200_OK, summary="eBA Entegrasyon Ayarlarını Güncelle", description="Bimser eBA entegrasyon parametrelerini günceller ve diske kaydeder. Sadece ADMIN veya MANAGER yetkisine sahip kullanıcılar güncelleyebilir.")
 async def update_eba_settings(eba_in: EBASettingsSchema, current_user = Depends(get_current_user)):
     if current_user.role not in ["ADMIN", "MANAGER"]:
         raise HTTPException(status_code=403, detail="Not authorized to edit settings")
