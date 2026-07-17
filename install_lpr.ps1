@@ -10,8 +10,8 @@ if (-not $isAdmin) {
 }
 
 # 2. Check for Docker Desktop
-$dockerCheck = Where-Object { $_ } -InputObject (Get-Command docker -ErrorAction SilentlyContinue)
-if (-not $dockerCheck) {
+$dockerCheck = Get-Command docker -ErrorAction SilentlyContinue
+if ($null -eq $dockerCheck) {
     Write-Host "[+] Docker Desktop bulunamadı. Kurulum başlatılıyor (winget)..." -ForegroundColor Yellow
     winget install Docker.DockerDesktop --accept-source-agreements --accept-package-agreements
     Write-Host "[!] Lütfen bilgisayarınızı yeniden başlatın veya Docker'ı açıp tekrar deneyin." -ForegroundColor Red
