@@ -40,6 +40,9 @@ cd "$INSTALL_DIR"
 # 4. Download docker-compose.yml and nginx.conf
 echo "[+] Yapılandırma dosyaları indiriliyor..."
 curl -sSL https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/docker-compose.yml -o docker-compose.yml
+if [ -d nginx/nginx.conf ]; then
+    rm -rf nginx/nginx.conf
+fi
 mkdir -p nginx
 curl -sSL https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/nginx/nginx.conf -o nginx/nginx.conf
 

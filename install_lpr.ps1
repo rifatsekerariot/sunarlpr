@@ -30,6 +30,14 @@ Set-Location $installDir
 # 4. Download docker-compose.yml and nginx.conf
 Write-Host "[+] Downloading configuration files..." -ForegroundColor Cyan
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/rifatsekerariot/sunarlpr/main/docker-compose.yml" -OutFile "docker-compose.yml"
+
+if (Test-Path "nginx/nginx.conf") {
+    $check = Get-Item "nginx/nginx.conf"
+    if ($check.PSIsContainer) {
+        Remove-Item -Path "nginx/nginx.conf" -Force -Recurse | Out-Null
+    }
+}
+
 if (-not (Test-Path "nginx")) {
     New-Item -ItemType Directory -Path "nginx" | Out-Null
 }
