@@ -16,9 +16,8 @@ if ($null -eq $dockerCheck) {
     winget install Docker.DockerDesktop --accept-source-agreements --accept-package-agreements
     Write-Host "[!] Lütfen bilgisayarınızı yeniden başlatın veya Docker'ı açıp tekrar deneyin." -ForegroundColor Red
     Exit
-} else {
-    Write-Host "[✓] Docker zaten yüklü." -ForegroundColor Green
 }
+Write-Host "[✓] Docker zaten yüklü." -ForegroundColor Green
 
 # 3. Create Project Directory
 $installDir = "C:\sunar_lpr"
