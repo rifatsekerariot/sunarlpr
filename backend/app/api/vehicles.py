@@ -7,6 +7,7 @@ from app.repositories.repositories import VehicleRepository
 from app.api.schemas import VehicleCreate, VehicleUpdate, VehicleResponse
 from app.models.models import Vehicle
 from app.api.auth import get_current_user
+from app.services.redis_service import redis_service
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
@@ -42,15 +43,16 @@ async def create_vehicle(
     current_user = Depends(get_current_user)
 ):
     if current_user.role not in ["ADMIN", "MANAGER", "OPERATOR"]:
-        raise HTTPException(status_code=403, detail="Not authorized to register vehicles")
+         raise HTTPException(status_code=403, detail="Not authorized to register vehicles")
     repo = VehicleRepository(db)
     existing = await repo.get_by_plate(vehicle_in.plate_number)
     if existing:
-        raise HTTPException(status_code=400, detail="Vehicle plate already registered")
-        
+         raise HTTPException(status_code=400, detail="Vehicle plate already registered")
+         
     vehicle = Vehicle(**vehicle_in.model_dump())
     new_vehicle = await repo.create(vehicle)
     await db.commit()
+    await redis_service.publish_event("lpr_events", {"event_type": "VEHICLE_UPDATED"})
     return new_vehicle
 
 @router.put("/{vehicle_id}", response_model=VehicleResponse)
@@ -61,14 +63,15 @@ async def update_vehicle(
     current_user = Depends(get_current_user)
 ):
     if current_user.role not in ["ADMIN", "MANAGER", "OPERATOR"]:
-        raise HTTPException(status_code=403, detail="Not authorized to edit vehicles")
+         raise HTTPException(status_code=403, detail="Not authorized to edit vehicles")
     repo = VehicleRepository(db)
     
     update_data = vehicle_in.model_dump(exclude_unset=True)
     vehicle = await repo.update(vehicle_id, **update_data)
     if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
+         raise HTTPException(status_code=404, detail="Vehicle not found")
     await db.commit()
+    await redis_service.publish_event("lpr_events", {"event_type": "VEHICLE_UPDATED"})
     return vehicle
 
 @router.delete("/{vehicle_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -78,12 +81,13 @@ async def delete_vehicle(
     current_user = Depends(get_current_user)
 ):
     if current_user.role not in ["ADMIN", "MANAGER"]:
-        raise HTTPException(status_code=403, detail="Not authorized to delete vehicles")
+         raise HTTPException(status_code=403, detail="Not authorized to delete vehicles")
     repo = VehicleRepository(db)
     success = await repo.delete(vehicle_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
+         raise HTTPException(status_code=404, detail="Vehicle not found")
     await db.commit()
+    await redis_service.publish_event("lpr_events", {"event_type": "VEHICLE_UPDATED"})
 
 
 from app.api.schemas import VehicleBulkDelete
@@ -94,10 +98,11 @@ async def bulk_delete_vehicles(
     current_user = Depends(get_current_user)
 ):
     if current_user.role not in ["ADMIN", "MANAGER"]:
-        raise HTTPException(status_code=403, detail="Not authorized to delete vehicles")
+         raise HTTPException(status_code=403, detail="Not authorized to delete vehicles")
     
     from sqlalchemy import delete as sql_delete
     query = sql_delete(Vehicle).where(Vehicle.id.in_(payload.ids))
     await db.execute(query)
     await db.commit()
+    await redis_service.publish_event("lpr_events", {"event_type": "VEHICLE_UPDATED"})
 

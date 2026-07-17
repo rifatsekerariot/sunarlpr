@@ -63,9 +63,19 @@
     camName: '',
     camLoc: '',
     camDir: 'IN',
-    camUrl: ''
+    camUrl: '',
+    ebaEnabled: false,
+    ebaApiType: 'REST',
+    ebaSoapUrl: '',
+    ebaRestUrl: '',
+    ebaUser: '',
+    ebaPassword: ''
 }" x-init="
-    $watch('currentTab', val => localStorage.setItem('active_tab', val));
+    $watch('currentTab', val => {
+        localStorage.setItem('active_tab', val);
+        if (val === 'settings') loadEbaSettings();
+    });
+    if (currentTab === 'settings') loadEbaSettings();
     window.openDetails = async (plate) => { 
         modalPlate = plate; 
         modalOpen = true; 
@@ -273,6 +283,52 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- eBA Integration Settings Card -->
+            <div class="border border-zinc-200 rounded-xl bg-white shadow-sm p-6 flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-zinc-100 pb-3">
+                    <h3 class="text-sm font-bold text-zinc-950 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-network-wired text-indigo-600"></i> Bimser eBA Entegrasyon Ayarları
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="ebaEnabled" class="sr-only peer">
+                            <div class="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                            <span class="ml-2 text-xs font-semibold text-zinc-500 uppercase">Aktif</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" x-show="ebaEnabled">
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-[10px] font-bold text-zinc-500 uppercase">Entegrasyon Tipi</label>
+                        <select x-model="ebaApiType" class="border border-zinc-200 rounded-lg p-2.5 text-xs w-full bg-zinc-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-zinc-800">
+                            <option value="REST">REST API</option>
+                            <option value="SOAP">SOAP Web Servisi</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-[10px] font-bold text-zinc-500 uppercase">Entegrasyon Kullanıcı Adı</label>
+                        <input type="text" x-model="ebaUser" placeholder="lpr_integration_user" class="border border-zinc-200 rounded-lg p-2.5 text-xs w-full bg-zinc-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-zinc-800">
+                    </div>
+                    <div class="flex flex-col gap-1.5" x-show="ebaApiType === 'SOAP'">
+                        <label class="text-[10px] font-bold text-zinc-500 uppercase">eBA SOAP Web Servis URL</label>
+                        <input type="text" x-model="ebaSoapUrl" placeholder="http://localhost/eba.net/ws/ebawsapi.asmx" class="border border-zinc-200 rounded-lg p-2.5 text-xs w-full bg-zinc-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-zinc-800">
+                    </div>
+                    <div class="flex flex-col gap-1.5" x-show="ebaApiType === 'REST'">
+                        <label class="text-[10px] font-bold text-zinc-500 uppercase">eBA REST API URL</label>
+                        <input type="text" x-model="ebaRestUrl" placeholder="http://localhost/eba.net/api/v1/processes" class="border border-zinc-200 rounded-lg p-2.5 text-xs w-full bg-zinc-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-zinc-800">
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-[10px] font-bold text-zinc-500 uppercase">Entegrasyon Şifresi</label>
+                        <input type="password" x-model="ebaPassword" placeholder="••••••••" class="border border-zinc-200 rounded-lg p-2.5 text-xs w-full bg-zinc-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-zinc-800">
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 mt-2">
+                    <button onclick="submitEbaSettings()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-xs tracking-wider transition uppercase">Ayarları Kaydet</button>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -394,6 +450,32 @@
             htmx.trigger('body', 'reloadLogs');
             htmx.trigger('#vehicle-table-body', 'load');
         }
+
+        let socket;
+        function connectWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`;
+            socket = new WebSocket(wsUrl);
+
+            socket.onmessage = function(event) {
+                console.log("WebSocket event received:", event.data);
+                triggerAllRefreshes();
+            };
+
+            socket.onclose = function(e) {
+                console.log('Socket is closed. Reconnect will be attempted in 2 seconds.', e.reason);
+                setTimeout(function() {
+                    connectWebSocket();
+                }, 2000);
+            };
+
+            socket.onerror = function(err) {
+                console.error('Socket encountered error: ', err.message, 'Closing socket');
+                socket.close();
+            };
+        }
+
+        connectWebSocket();
 
         async function submitVehicleForm() {
             const state = window.getVehicleState();
@@ -569,6 +651,62 @@
                 if (mainChk) mainChk.checked = false;
             } else {
                 alert('Toplu silme işlemi sırasında bir hata oluştu.');
+            }
+        }
+
+        async function loadEbaSettings() {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+            try {
+                const res = await fetch('/api/settings/eba', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const state = document.body.__x.$data;
+                    state.ebaEnabled = data.EBA_ENABLED;
+                    state.ebaApiType = data.EBA_API_TYPE;
+                    state.ebaSoapUrl = data.EBA_SOAP_URL;
+                    state.ebaRestUrl = data.EBA_REST_URL;
+                    state.ebaUser = data.EBA_USER;
+                    state.ebaPassword = data.EBA_PASSWORD;
+                }
+            } catch (e) {
+                console.error("eBA settings load error", e);
+            }
+        }
+
+        async function submitEbaSettings() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('Oturum sonlandı, lütfen tekrar giriş yapın.');
+                window.location.href = '/';
+                return;
+            }
+
+            const state = document.body.__x.$data;
+            const payload = {
+                EBA_ENABLED: state.ebaEnabled,
+                EBA_API_TYPE: state.ebaApiType,
+                EBA_SOAP_URL: state.ebaSoapUrl,
+                EBA_REST_URL: state.ebaRestUrl,
+                EBA_USER: state.ebaUser,
+                EBA_PASSWORD: state.ebaPassword
+            };
+
+            const res = await fetch('/api/settings/eba', {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert('eBA entegrasyon ayarları başarıyla kaydedildi.');
+            } else {
+                alert('Ayarlar kaydedilemedi.');
             }
         }
     </script>

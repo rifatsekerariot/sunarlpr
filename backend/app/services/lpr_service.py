@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from app.repositories.repositories import CameraRepository, VehicleRepository, AccessLogRepository
 from app.models.models import Camera, Vehicle, AccessLog
 from app.services.redis_service import redis_service
+from app.services.eba_service import EBAService
+import asyncio
 
 logger = structlog.get_logger()
 
@@ -95,5 +97,19 @@ class LPRService:
         }
         
         await redis_service.publish_event("lpr_events", event_payload)
+        
+        # 5. Trigger eBA Workflow Integration
+        try:
+            asyncio.create_task(
+                EBAService.trigger_eba_process(
+                    plate_number=plate_number,
+                    camera_name=camera_name,
+                    direction=direction,
+                    is_authorized=is_authorized,
+                    snapshot_path=snapshot_path
+                )
+            )
+        except Exception as e:
+            logger.error("failed_to_schedule_eba_trigger", error=str(e))
         
         return access_log
