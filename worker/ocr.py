@@ -14,6 +14,7 @@ STRICT_PLATE_REGEXES = [
     re.compile(r"^(0[1-9]|[1-7][0-9]|8[0-1])[A-Z]{3}\d{2}$"),
     re.compile(r"^(0[1-9]|[1-7][0-9]|8[0-1])[A-Z]{2}\d{4}$"),
     re.compile(r"^(0[1-9]|[1-7][0-9]|8[0-1])[A-Z]{3}\d{3}$"),
+    re.compile(r"^(0[1-9]|[1-7][0-9]|8[0-1])[A-Z]{1,4}\d{1,4}$"),
 ]
 
 # Lexicon mappings to correct typical OCR typos contextually
