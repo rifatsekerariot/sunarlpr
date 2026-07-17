@@ -58,7 +58,7 @@ class CentroidTracker:
     def register(self, bbox):
         self.objects[self.next_object_id] = bbox
         self.disappeared[self.next_object_id] = 0
-        self.voting_cache[self.next_object_id] = {}
+        self.voting_cache[self.next_object_id] = []
         self.sent_plates[self.next_object_id] = set()
         self.total_frames_tracked[self.next_object_id] = 0
         self.next_object_id += 1
@@ -69,7 +69,18 @@ class CentroidTracker:
         del self.disappeared[object_id]
         self.sent_plates.pop(object_id, None)
         self.total_frames_tracked.pop(object_id, None)
-        return self.voting_cache.pop(object_id, {})
+        raw_list = self.voting_cache.pop(object_id, [])
+        report = {}
+        for item in raw_list:
+            p = item["plate"]
+            if p not in report:
+                report[p] = {"count": 0, "sum_conf": 0.0, "review": False, "crop": item["crop"]}
+            report[p]["count"] += 1
+            report[p]["sum_conf"] += item["confidence"]
+            if item["review_needed"]:
+                report[p]["review"] = True
+        return report
+
 
     def update(self, detected_bboxes):
         deregistered_reports = []
@@ -234,33 +245,38 @@ def main():
         # 1. Update active tracker caches with weighted scoring and FIFO sliding window (max 12)
         if detected_bboxes and active_trackers:
             matched_id = active_trackers[-1][0]
-            cache = tracker.voting_cache[matched_id]
             
             # Increment total valid frames count for this vehicle
             tracker.total_frames_tracked[matched_id] += 1
             total_valid_frames = tracker.total_frames_tracked[matched_id]
 
-            if plate not in cache:
-                cache[plate] = {"count": 0, "sum_conf": 0.0, "review": False, "crop": crop_img}
+            # Append new detection tuple to sliding window queue
+            tracker.voting_cache[matched_id].append({
+                "plate": plate,
+                "confidence": confidence,
+                "review_needed": review_needed,
+                "crop": crop_img
+            })
             
-            cache[plate]["count"] += 1
-            cache[plate]["sum_conf"] += confidence
-            if review_needed:
-                cache[plate]["review"] = True
+            # Enforce sliding window size
+            if len(tracker.voting_cache[matched_id]) > tracker.max_window_size:
+                tracker.voting_cache[matched_id].pop(0)
 
-            logger.info("Debug tracking", freq=cache[plate]["count"], plate=plate, matched_id=matched_id, total_frames=total_valid_frames)
+            # Build aggregated cache view for voting calculation
+            cache = {}
+            for item in tracker.voting_cache[matched_id]:
+                p = item["plate"]
+                if p not in cache:
+                    cache[p] = {"count": 0, "sum_conf": 0.0, "review": False, "crop": item["crop"]}
+                cache[p]["count"] += 1
+                cache[p]["sum_conf"] += item["confidence"]
+                if item["review_needed"]:
+                    cache[p]["review"] = True
 
-
-            # FIFO Sliding Window logic: if total valid frames exceeds 12, decay older candidate counts proportionally
-            if total_valid_frames > tracker.max_window_size:
-                for p_key in list(cache.keys()):
-                    if cache[p_key]["count"] > 0:
-                        cache[p_key]["count"] -= 1
-                        # Adjust sum_conf to reflect decayed count
-                        cache[p_key]["sum_conf"] *= (cache[p_key]["count"] / (cache[p_key]["count"] + 1))
+            freq = cache[plate]["count"] if plate in cache else 0
+            logger.info("Debug tracking", freq=freq, plate=plate, matched_id=matched_id, total_frames=total_valid_frames)
 
             # Hybrid Trigger: If a candidate has >= 5 votes, check if it dominates the oylama
-            freq = cache[plate]["count"]
             if freq >= 5 and plate not in tracker.sent_plates[matched_id]:
                 # Calculate active candidate weight comparison (Ambiguity Check)
                 candidates_list = []
