@@ -131,74 +131,98 @@ class PlateOCR:
             # Yatay birleştirme
             if not best_plate and len(candidates) >= 2:
                 candidates.sort(key=lambda c: c[0][0][0])
-                for i in range(len(candidates) - 1):
-                    box1, text1, conf1 = candidates[i]
-                    box2, text2, conf2 = candidates[i+1]
-                    y1_center = (box1[0][1] + box1[2][1]) / 2
-                    y2_center = (box2[0][1] + box2[2][1]) / 2
-                    h1 = abs(box1[2][1] - box1[0][1])
-                    
-                    if abs(y1_center - y2_center) < (h1 * 0.8):
-                        merged = text1 + text2
+                for length in range(2, len(candidates) + 1):
+                    if best_plate:
+                        break
+                    for i in range(len(candidates) - length + 1):
+                        sub_cands = candidates[i:i+length]
+                        
+                        valid_line = True
+                        base_y = (sub_cands[0][0][0][1] + sub_cands[0][0][2][1]) / 2
+                        base_h = abs(sub_cands[0][0][2][1] - sub_cands[0][0][0][1])
+                        for c in sub_cands[1:]:
+                            c_y = (c[0][0][1] + c[0][2][1]) / 2
+                            if abs(base_y - c_y) > (base_h * 0.8):
+                                valid_line = False
+                                break
+                                
+                        if not valid_line:
+                            continue
+                            
+                        merged = "".join(c[1] for c in sub_cands)
+                        conf = sum(c[2] for c in sub_cands) / length
+                        
                         if self.check_strict_layout(merged):
                             best_plate = merged
-                            best_conf = (conf1 + conf2) / 2
+                            best_conf = conf
                             review_needed = (best_conf < 0.85)
                             best_box = [
-                                [min(box1[0][0], box2[0][0]), min(box1[0][1], box2[0][1])],
-                                [max(box1[1][0], box2[1][0]), min(box1[1][1], box2[1][1])],
-                                [max(box1[2][0], box2[2][0]), max(box1[2][1], box2[2][1])],
-                                [min(box1[3][0], box2[3][0]), max(box1[3][1], box2[3][1])]
+                                [min(c[0][0][0] for c in sub_cands), min(c[0][0][1] for c in sub_cands)],
+                                [max(c[0][1][0] for c in sub_cands), min(c[0][1][1] for c in sub_cands)],
+                                [max(c[0][2][0] for c in sub_cands), max(c[0][2][1] for c in sub_cands)],
+                                [min(c[0][3][0] for c in sub_cands), max(c[0][3][1] for c in sub_cands)]
                             ]
                             break
                         else:
                             fixed_merged = self.try_positional_fixes(merged)
                             if self.check_strict_layout(fixed_merged):
                                 best_plate = fixed_merged
-                                best_conf = (conf1 + conf2) / 2
+                                best_conf = conf
                                 review_needed = True
                                 best_box = [
-                                    [min(box1[0][0], box2[0][0]), min(box1[0][1], box2[0][1])],
-                                    [max(box1[1][0], box2[1][0]), min(box1[1][1], box2[1][1])],
-                                    [max(box1[2][0], box2[2][0]), max(box1[2][1], box2[2][1])],
-                                    [min(box1[3][0], box2[3][0]), max(box1[3][1], box2[3][1])]
+                                    [min(c[0][0][0] for c in sub_cands), min(c[0][0][1] for c in sub_cands)],
+                                    [max(c[0][1][0] for c in sub_cands), min(c[0][1][1] for c in sub_cands)],
+                                    [max(c[0][2][0] for c in sub_cands), max(c[0][2][1] for c in sub_cands)],
+                                    [min(c[0][3][0] for c in sub_cands), max(c[0][3][1] for c in sub_cands)]
                                 ]
                                 break
 
             # Dikey birleştirme
             if not best_plate and len(candidates) >= 2:
                 candidates.sort(key=lambda c: c[0][0][1])
-                for i in range(len(candidates) - 1):
-                    box1, text1, conf1 = candidates[i]
-                    box2, text2, conf2 = candidates[i+1]
-                    x1_center = (box1[0][0] + box1[1][0]) / 2
-                    x2_center = (box2[0][0] + box2[1][0]) / 2
-                    w1 = abs(box1[1][0] - box1[0][0])
-                    
-                    if abs(x1_center - x2_center) < (w1 * 0.9):
-                        merged = text1 + text2
+                for length in range(2, len(candidates) + 1):
+                    if best_plate:
+                        break
+                    for i in range(len(candidates) - length + 1):
+                        sub_cands = candidates[i:i+length]
+                        
+                        valid_col = True
+                        base_x = (sub_cands[0][0][0][0] + sub_cands[0][0][1][0]) / 2
+                        base_w = abs(sub_cands[0][0][1][0] - sub_cands[0][0][0][0])
+                        for c in sub_cands[1:]:
+                            c_x = (c[0][0][0] + c[0][1][0]) / 2
+                            if abs(base_x - c_x) > (base_w * 0.9):
+                                valid_col = False
+                                break
+                                
+                        if not valid_col:
+                            continue
+                            
+                        merged = "".join(c[1] for c in sub_cands)
+                        conf = sum(c[2] for c in sub_cands) / length
+                        
                         if self.check_strict_layout(merged):
                             best_plate = merged
-                            best_conf = (conf1 + conf2) / 2
+                            best_conf = conf
                             review_needed = (best_conf < 0.85)
                             best_box = [
-                                [min(box1[0][0], box2[0][0]), min(box1[0][1], box2[0][1])],
-                                [max(box1[1][0], box2[1][0]), min(box1[1][1], box2[1][1])],
-                                [max(box1[2][0], box2[2][0]), max(box1[2][1], box2[2][1])],
-                                [min(box1[3][0], box2[3][0]), max(box1[3][1], box2[3][1])]
+                                [min(c[0][0][0] for c in sub_cands), min(c[0][0][1] for c in sub_cands)],
+                                [max(c[0][1][0] for c in sub_cands), min(c[0][1][1] for c in sub_cands)],
+                                [max(c[0][2][0] for c in sub_cands), max(c[0][2][1] for c in sub_cands)],
+                                [min(c[0][3][0] for c in sub_cands), max(c[0][3][1] for c in sub_cands)]
                             ]
                             break
                         else:
                             fixed_merged = self.try_positional_fixes(merged)
                             if self.check_strict_layout(fixed_merged):
                                 best_plate = fixed_merged
-                                best_conf = (conf1 + conf2) / 2
+                                best_conf = conf
                                 review_needed = True
                                 best_box = [
-                                    [min(box1[0][0], box2[0][0]), min(box1[0][1], box2[0][1])],
-                                    [max(box1[1][0], box2[1][0]), min(box1[1][1], box2[1][1])],
-                                    [max(box1[2][0], box2[2][0]), max(box1[2][1], box2[2][1])],
-                                    [min(box1[3][0], box2[3][0]), max(box1[3][1], box2[3][1])]
+                                    [min(c[0][0][0] for c in sub_cands), min(c[0][0][1] for c in sub_cands)],
+                                    [max(c[0][1][0] for c in sub_cands), min(c[0][1][1] for c in sub_cands)],
+                                    [max(c[0][2][0] for c in sub_cands), max(c[0][2][1] for c in sub_cands)],
+                                    [min(c[0][3][0] for c in sub_cands), max(c[0][3][1] for c in sub_cands)]
                                 ]
                                 break
 
