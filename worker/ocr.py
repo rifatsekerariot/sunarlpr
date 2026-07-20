@@ -24,7 +24,7 @@ TO_LETTER = {"0": "O", "1": "I", "8": "B", "5": "S", "2": "Z", "6": "G"}
 class PlateOCR:
     def __init__(self):
         try:
-            self.ocr = PaddleOCR(lang='en', ocr_version='PP-OCRv4')
+            self.ocr = PaddleOCR(lang='en', ocr_version='PP-OCRv4', det_limit_side_len=2048)
             logger.info("PaddleOCR engine loaded successfully")
         except Exception as e:
             logger.warning("PaddleOCR loading failed", error=str(e))
@@ -83,10 +83,10 @@ class PlateOCR:
             h, w = frame.shape[:2]
             
             # Crop ROI to avoid OSD texts (date, Elita Kantar) and improve detection resolution
-            roi_y1 = int(h * 0.25)
-            roi_y2 = int(h * 0.95)
-            roi_x1 = int(w * 0.15)
-            roi_x2 = int(w * 0.85)
+            roi_y1 = int(h * 0.20)
+            roi_y2 = int(h * 0.85)  # Avoid bottom Elita Kantar OSD
+            roi_x1 = int(w * 0.20)
+            roi_x2 = int(w * 0.80)
             
             roi_frame = frame[roi_y1:roi_y2, roi_x1:roi_x2]
             rh, rw = roi_frame.shape[:2]
