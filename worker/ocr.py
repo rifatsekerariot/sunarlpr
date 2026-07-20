@@ -81,7 +81,17 @@ class PlateOCR:
 
         try:
             h, w = frame.shape[:2]
-            resized = cv2.resize(frame, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+            
+            # Crop ROI to avoid OSD texts (date, Elita Kantar) and improve detection resolution
+            roi_y1 = int(h * 0.25)
+            roi_y2 = int(h * 0.95)
+            roi_x1 = int(w * 0.15)
+            roi_x2 = int(w * 0.85)
+            
+            roi_frame = frame[roi_y1:roi_y2, roi_x1:roi_x2]
+            rh, rw = roi_frame.shape[:2]
+            
+            resized = cv2.resize(roi_frame, (rw * 2, rh * 2), interpolation=cv2.INTER_CUBIC)
             
             result = self.ocr.ocr(resized, cls=False)
             # Safe validation of Nested Lists returned by PaddleOCR
@@ -99,8 +109,8 @@ class PlateOCR:
                 raw_text, confidence = text_info
                 cleaned_text = self.clean_text(raw_text)
                 
-                # Scale coordinates back
-                orig_box = [[pt[0] / 2.0, pt[1] / 2.0] for pt in box]
+                # Scale coordinates back and add ROI offset
+                orig_box = [[(pt[0] / 2.0) + roi_x1, (pt[1] / 2.0) + roi_y1] for pt in box]
                 candidates.append((orig_box, cleaned_text, float(confidence)))
 
             if not candidates:
