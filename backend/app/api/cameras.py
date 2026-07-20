@@ -118,3 +118,16 @@ async def ping_camera(
         return '<span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span>ONLİNE</span>'
     except Exception:
         return '<span class="px-2.5 py-0.5 text-[10px] font-medium rounded-full bg-red-50 text-red-700 border border-red-200">OFFLİNE</span>'
+
+@router.get("/worker/active", response_model=List[CameraResponse])
+async def worker_active_cameras(
+    db: AsyncSession = Depends(get_db_session),
+    x_api_key: str | None = __import__("fastapi").Header(None, alias="X-API-KEY"),
+):
+    """Endpoint for the worker to securely fetch cameras using the API key."""
+    import os
+    expected_key = os.getenv("LPR_WORKER_API_KEY", "ariot-lpr-worker-shared-secure-token-2026")
+    if not x_api_key or x_api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid API KEY")
+    repo = CameraRepository(db)
+    return await repo.get_all()

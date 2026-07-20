@@ -148,7 +148,7 @@ def authenticate_worker():
 
 def get_active_cameras():
     try:
-        url = f"{BACKEND_API_URL}/api/cameras"
+        url = f"{BACKEND_API_URL}/api/cameras/worker/active"
         headers = {
             "X-API-KEY": LPR_WORKER_API_KEY
         }
@@ -157,7 +157,7 @@ def get_active_cameras():
             return res.json()
     except Exception as e:
         logger.error("Failed to load active cameras", error=str(e))
-    return [{"id": "8f8f8f8f-8f8f-8f8f-8f8f-8f8f8f8f8f8f", "name": "TEST", "url": "rtsp://admin:Adanarft@192.168.1.64:554/Streaming/Channels/101"}]
+    return []
 
 
 # Duplicate detection suppression
@@ -262,154 +262,166 @@ def main():
         return
 
     ocr_engine = PlateOCR()
-    tracker = CentroidTracker(max_disappeared=15, max_window_size=12)
+    
+    trackers = {}
+    readers = {}
+    last_camera_sync = 0
 
-    cameras = get_active_cameras()
-    cam = cameras[0]
-    camera_url = cam["url"]
-    camera_id = cam["id"]
-
-    logger.info("Starting LPR camera worker loop")
-    reader = FreshFrameReader(camera_url)
-    if not reader.isOpened():
-        logger.error("Failed to open camera RTSP stream", url=camera_url)
-        return
+    logger.info("Starting LPR dynamic multi-camera worker loop")
 
     while True:
-        ret, frame = reader.read()
-        if not ret or frame is None:
-            time.sleep(0.1)
+        # Sync cameras every 30 seconds
+        if time.time() - last_camera_sync > 30:
+            cameras = get_active_cameras()
+            active_ids = set()
+            for cam in cameras:
+                cam_id = cam["id"]
+                cam_url = cam.get("url", cam.get("rtsp_url"))
+                if not cam_url:
+                    continue
+                active_ids.add(cam_id)
+                if cam_id not in readers:
+                    logger.info("Adding new camera stream", camera_id=cam_id, url=cam_url)
+                    readers[cam_id] = FreshFrameReader(cam_url)
+                    trackers[cam_id] = CentroidTracker(max_disappeared=15, max_window_size=12)
+            
+            # Remove deleted cameras
+            for cam_id in list(readers.keys()):
+                if cam_id not in active_ids:
+                    logger.info("Removing deleted camera stream", camera_id=cam_id)
+                    readers[cam_id].release()
+                    del readers[cam_id]
+                    del trackers[cam_id]
+                    
+            last_camera_sync = time.time()
+
+        if not readers:
+            time.sleep(1)
             continue
 
-        try:
-            plate, confidence, crop_img, review_needed = ocr_engine.read_plate(frame)
-        except Exception as ocr_err:
-            logger.error("OCR engine read_plate error on frame", error=str(ocr_err))
-            plate, confidence, crop_img, review_needed = "", 0.0, None, True
+        for camera_id, reader in list(readers.items()):
+            ret, frame = reader.read()
+            if not ret or frame is None:
+                continue
 
-        detected_bboxes = []
-        # Rule 1: Only count votes where individual OCR confidence >= 0.85
-        if plate and confidence >= 0.85 and crop_img is not None:
-            h, w = frame.shape[:2]
-            detected_bboxes.append([w // 4, h // 4, w * 3 // 4, h * 3 // 4])
+            try:
+                plate, confidence, crop_img, review_needed = ocr_engine.read_plate(frame)
+            except Exception as ocr_err:
+                logger.error("OCR engine read_plate error on frame", error=str(ocr_err))
+                plate, confidence, crop_img, review_needed = "", 0.0, None, True
 
-        active_trackers, deregistered_reports = tracker.update(detected_bboxes)
+            detected_bboxes = []
+            if plate and confidence >= 0.85 and crop_img is not None:
+                h, w = frame.shape[:2]
+                detected_bboxes.append([w // 4, h // 4, w * 3 // 4, h * 3 // 4])
 
-        # 1. Update active tracker caches with weighted scoring and FIFO sliding window (max 12)
-        if detected_bboxes and active_trackers:
-            matched_id = active_trackers[-1][0]
-            
-            # Increment total valid frames count for this vehicle
-            tracker.total_frames_tracked[matched_id] += 1
-            total_valid_frames = tracker.total_frames_tracked[matched_id]
+            tracker = trackers[camera_id]
+            active_trackers, deregistered_reports = tracker.update(detected_bboxes)
 
-            # Append new detection tuple to sliding window queue
-            tracker.voting_cache[matched_id].append({
-                "plate": plate,
-                "confidence": confidence,
-                "review_needed": review_needed,
-                "crop": crop_img
-            })
-            
-            # Enforce sliding window size
-            if len(tracker.voting_cache[matched_id]) > tracker.max_window_size:
-                tracker.voting_cache[matched_id].pop(0)
+            if detected_bboxes and active_trackers:
+                matched_id = active_trackers[-1][0]
+                tracker.total_frames_tracked[matched_id] += 1
+                total_valid_frames = tracker.total_frames_tracked[matched_id]
 
-            # Build aggregated cache view for voting calculation
-            cache = {}
-            for item in tracker.voting_cache[matched_id]:
-                p = item["plate"]
-                if p not in cache:
-                    cache[p] = {"count": 0, "sum_conf": 0.0, "review": False, "crop": item["crop"]}
-                cache[p]["count"] += 1
-                cache[p]["sum_conf"] += item["confidence"]
-                if item["review_needed"]:
-                    cache[p]["review"] = True
-
-            freq = cache[plate]["count"] if plate in cache else 0
-            logger.info("Debug tracking", freq=freq, plate=plate, matched_id=matched_id, total_frames=total_valid_frames)
-
-            # Hybrid Trigger: If a candidate has >= 5 votes, check if it dominates the oylama
-            if freq >= 5 and plate not in tracker.sent_plates[matched_id]:
-                # Calculate active candidate weight comparison (Ambiguity Check)
-                candidates_list = []
-                for p_str, info in cache.items():
-                    c_freq = info["count"]
-                    if c_freq > 0:
-                        avg_c_conf = info["sum_conf"] / c_freq
-                        weight = avg_c_conf * np.log(c_freq + 1)
-                        candidates_list.append((p_str, weight, info))
+                tracker.voting_cache[matched_id].append({
+                    "plate": plate,
+                    "confidence": confidence,
+                    "review_needed": review_needed,
+                    "crop": crop_img
+                })
                 
-                candidates_list.sort(key=lambda x: x[1], reverse=True)
-                
-                if candidates_list:
-                    top_plate, top_weight, top_info = candidates_list[0]
-                    # Only trigger if the top plate is indeed the one that reached 5 votes
-                    if top_plate == plate:
-                        # Ambiguity check: if 2nd candidate is within 15% of top weight, flag review_needed
-                        is_ambiguous = False
-                        if len(candidates_list) > 1:
-                            runner_plate, runner_weight, _ = candidates_list[1]
-                            if (top_weight - runner_weight) / top_weight < 0.15:
-                                is_ambiguous = True
+                if len(tracker.voting_cache[matched_id]) > tracker.max_window_size:
+                    tracker.voting_cache[matched_id].pop(0)
 
-                        final_review = top_info["review"] or is_ambiguous or (top_info["sum_conf"] / freq < 0.85)
-                        
-                        tracker.sent_plates[matched_id].add(plate)
-                        logger.info("Immediate stable plate trigger", plate=plate, votes=freq, review=final_review)
-                        send_plate_to_backend(
-                            plate=plate,
-                            confidence=top_info["sum_conf"] / freq,
-                            crop_img=top_info["crop"],
-                            review_needed=final_review,
-                            camera_id=camera_id
-                        )
+                cache = {}
+                for item in tracker.voting_cache[matched_id]:
+                    p = item["plate"]
+                    if p not in cache:
+                        cache[p] = {"count": 0, "sum_conf": 0.0, "review": False, "crop": item["crop"]}
+                    cache[p]["count"] += 1
+                    cache[p]["sum_conf"] += item["confidence"]
+                    if item["review_needed"]:
+                        cache[p]["review"] = True
 
-        # 2. Process final exit reports for any mismatched tracker
-        for object_id, report in deregistered_reports:
-            if not report:
-                continue
+                freq = cache[plate]["count"] if plate in cache else 0
 
-            total_votes = sum(item["count"] for item in report.values())
-            if total_votes < 4:
-                continue
+                if freq >= 5 and plate not in tracker.sent_plates[matched_id]:
+                    candidates_list = []
+                    for p_str, info in cache.items():
+                        c_freq = info["count"]
+                        if c_freq > 0:
+                            avg_c_conf = info["sum_conf"] / c_freq
+                            weight = avg_c_conf * np.log(c_freq + 1)
+                            candidates_list.append((p_str, weight, info))
+                    
+                    candidates_list.sort(key=lambda x: x[1], reverse=True)
+                    
+                    if candidates_list:
+                        top_plate, top_weight, top_info = candidates_list[0]
+                        if top_plate == plate:
+                            is_ambiguous = False
+                            if len(candidates_list) > 1:
+                                runner_plate, runner_weight, _ = candidates_list[1]
+                                if (top_weight - runner_weight) / top_weight < 0.15:
+                                    is_ambiguous = True
 
-            candidates_weighted = []
-            for p_str, info in report.items():
-                freq = info["count"]
-                if freq > 0:
-                    avg_conf = info["sum_conf"] / freq
-                    weight = avg_conf * np.log(freq + 1)
-                    candidates_weighted.append((p_str, weight, info))
+                            final_review = top_info["review"] or is_ambiguous or (top_info["sum_conf"] / freq < 0.85)
+                            
+                            tracker.sent_plates[matched_id].add(plate)
+                            send_plate_to_backend(
+                                plate=plate,
+                                confidence=top_info["sum_conf"] / freq,
+                                crop_img=top_info["crop"],
+                                review_needed=final_review,
+                                camera_id=camera_id
+                            )
 
-            candidates_weighted.sort(key=lambda x: x[1], reverse=True)
-            if not candidates_weighted:
-                continue
+            for object_id, report in deregistered_reports:
+                if not report:
+                    continue
 
-            top_plate, top_weight, top_info = candidates_weighted[0]
-            top_freq = top_info["count"]
+                total_votes = sum(item["count"] for item in report.values())
+                if total_votes < 4:
+                    continue
 
-            if top_freq < (total_votes // 2) + 1:
-                continue
+                candidates_weighted = []
+                for p_str, info in report.items():
+                    freq = info["count"]
+                    if freq > 0:
+                        avg_conf = info["sum_conf"] / freq
+                        weight = avg_conf * np.log(freq + 1)
+                        candidates_weighted.append((p_str, weight, info))
 
-            if object_id in tracker.sent_plates and top_plate in tracker.sent_plates[object_id]:
-                continue
+                candidates_weighted.sort(key=lambda x: x[1], reverse=True)
+                if not candidates_weighted:
+                    continue
 
-            is_ambiguous = False
-            if len(candidates_weighted) > 1:
-                runner_plate, runner_weight, _ = candidates_weighted[1]
-                if (top_weight - runner_weight) / top_weight < 0.15:
-                    is_ambiguous = True
+                top_plate, top_weight, top_info = candidates_weighted[0]
+                top_freq = top_info["count"]
 
-            final_review = top_info["review"] or is_ambiguous or (top_info["sum_conf"] / top_freq < 0.85)
+                if top_freq < (total_votes // 2) + 1:
+                    continue
 
-            send_plate_to_backend(
-                plate=top_plate,
-                confidence=top_info["sum_conf"] / top_freq,
-                crop_img=top_info["crop"],
-                review_needed=final_review,
-                camera_id=camera_id
-            )
+                if object_id in tracker.sent_plates and top_plate in tracker.sent_plates[object_id]:
+                    continue
+
+                is_ambiguous = False
+                if len(candidates_weighted) > 1:
+                    runner_plate, runner_weight, _ = candidates_weighted[1]
+                    if (top_weight - runner_weight) / top_weight < 0.15:
+                        is_ambiguous = True
+
+                final_review = top_info["review"] or is_ambiguous or (top_info["sum_conf"] / top_freq < 0.85)
+
+                send_plate_to_backend(
+                    plate=top_plate,
+                    confidence=top_info["sum_conf"] / top_freq,
+                    crop_img=top_info["crop"],
+                    review_needed=final_review,
+                    camera_id=camera_id
+                )
+        
+        time.sleep(0.01)
 
 
 if __name__ == "__main__":
